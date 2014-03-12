@@ -77,7 +77,7 @@ public class Test {
 			rangeCriterion.setCompareColumn(new Column(Bytes.toBytes("cf"))
 					.setQualifier(Bytes.toBytes("a")));
 			rangeCriterion.setComparisonType(CompareType.RANGE);
-			rangeCriterion.setRange(Bytes.toBytes("value3"), Bytes.toBytes("value9"));
+			rangeCriterion.setRange(Bytes.toBytes("value3"), Bytes.toBytes("value8"));
 			rangeQuery.addCriterion(rangeCriterion);
 			List<Result> rangeResults = table.execIndexedQuery(rangeQuery);
 			

@@ -177,6 +177,7 @@ public class HIndexedTable extends HTable {
             oos.close();
             masterIdxTable.put(idxPut);
             } else if (operation == DELETE_INDEX){
+            	// Modified by Cong
                 
             } else {
                 throw new UnsupportedOperationException("Unknown index operation type.");
