@@ -98,7 +98,7 @@ public class HIndexedTable extends HTable {
 
 		checkSecondaryIndexMasterTable();
 
-		updateMasterIndexTable(family, qualifier, CREATE_INDEX);
+		updateMasterIndexTable(family, qualifier, indexType, arguments, CREATE_INDEX);
 
 		results = this.coprocessorService(IndexCoprocessorInMemService.class,
 				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
@@ -130,7 +130,7 @@ public class HIndexedTable extends HTable {
 
 		checkSecondaryIndexMasterTable();
 
-		updateMasterIndexTable(family, qualifier, DELETE_INDEX);
+		updateMasterIndexTable(family, qualifier, null, null, DELETE_INDEX);
 
 		results = this.coprocessorService(IndexCoprocessorInMemService.class,
 				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
@@ -167,7 +167,8 @@ public class HIndexedTable extends HTable {
 	}
 
 	private void updateMasterIndexTable(byte[] family, byte[] qualifier,
-			int operation) throws IOException {
+			String indexType, Object[] arguments, int operation)
+			throws IOException {
 		HTable masterIdxTable = null;
 
 		try {
@@ -191,6 +192,8 @@ public class HIndexedTable extends HTable {
 
 				Put idxPut = new Put(getTableName());
 				IndexedColumn ic = new IndexedColumn(family, qualifier);
+				ic.setIndexType(indexType);
+				ic.setArguments(arguments);
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
 				ObjectOutputStream oos = new ObjectOutputStream(baos);
 				oos.writeObject(ic);
