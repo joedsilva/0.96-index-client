@@ -14,6 +14,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HConnection;
@@ -29,6 +30,7 @@ import ca.mcgill.distsys.hbase96.indexcommonsinmem.IndexedColumn;
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.SecondaryIndexConstants;
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.Util;
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexAlreadyExistsException;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexNotExistsException;
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.IndexedColumnQuery;
 import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorInMemService;
 
@@ -36,176 +38,226 @@ import com.google.protobuf.ServiceException;
 
 public class HIndexedTable extends HTable {
 
-    private static final int DELETE_INDEX = 0;
-    private static final int CREATE_INDEX = 1;
-    
-    private static Log LOG = LogFactory.getLog(HIndexedTable.class);
+	private static final int DELETE_INDEX = 0;
+	private static final int CREATE_INDEX = 1;
 
-    public HIndexedTable(byte[] tableName, HConnection connection, ExecutorService pool) throws IOException {
-        super(tableName, connection, pool);
-    }
+	private static Log LOG = LogFactory.getLog(HIndexedTable.class);
 
-    public HIndexedTable(Configuration conf, byte[] tableName, ExecutorService pool) throws IOException {
-        super(conf, tableName, pool);
-    }
+	public HIndexedTable(byte[] tableName, HConnection connection,
+			ExecutorService pool) throws IOException {
+		super(tableName, connection, pool);
+	}
 
-    public HIndexedTable(Configuration conf, byte[] tableName) throws IOException {
-        super(conf, tableName);
-    }
+	public HIndexedTable(Configuration conf, byte[] tableName,
+			ExecutorService pool) throws IOException {
+		super(conf, tableName, pool);
+	}
 
-    public HIndexedTable(Configuration conf, String tableName) throws IOException {
-        super(conf, tableName);
-    }
+	public HIndexedTable(Configuration conf, byte[] tableName)
+			throws IOException {
+		super(conf, tableName);
+	}
 
-    /**
-     * Creates an index on this table's family:qualifier column.
-     * 
-     * @param family
-     * @param qualifier
-     * @throws Throwable 
-     * @throws ServiceException 
-     */
-    
-    // Modified by Cong 
-    public void createIndex(String family, String qualifier, String indexType, Object[] arguments) throws ServiceException, Throwable {
-        createIndex(Bytes.toBytes(family), Bytes.toBytes(qualifier), indexType, arguments);
-    }
+	public HIndexedTable(Configuration conf, String tableName)
+			throws IOException {
+		super(conf, tableName);
+	}
 
-    /**
-     * Creates an index on this table's family:qualifier column.
-     * 
-     * @param family
-     * @param qualifier
-     * @throws Throwable
-     * @throws ServiceException
-     */
-    
-    // Modified by Cong
-    public void createIndex(byte[] family, byte[] qualifier, String indexType, Object[] arguments) throws ServiceException, Throwable {
+	/**
+	 * Creates an index on this table's family:qualifier column.
+	 * 
+	 * @param family
+	 * @param qualifier
+	 * @throws Throwable
+	 * @throws ServiceException
+	 */
 
-        CreateIndexCallable callable = new CreateIndexCallable(family, qualifier, indexType, arguments);
-        Map<byte[], Boolean> results = null;
+	// Modified by Cong
+	public void createIndex(String family, String qualifier, String indexType,
+			Object[] arguments) throws ServiceException, Throwable {
+		createIndex(Bytes.toBytes(family), Bytes.toBytes(qualifier), indexType,
+				arguments);
+	}
 
-        checkSecondaryIndexMasterTable();
+	/**
+	 * Creates an index on this table's family:qualifier column.
+	 * 
+	 * @param family
+	 * @param qualifier
+	 * @throws Throwable
+	 * @throws ServiceException
+	 */
 
-        updateMasterIndexTable(family, qualifier, CREATE_INDEX);
+	// Modified by Cong
+	public void createIndex(byte[] family, byte[] qualifier, String indexType,
+			Object[] arguments) throws ServiceException, Throwable {
 
-        results = this.coprocessorService(IndexCoprocessorInMemService.class, HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
+		CreateIndexCallable callable = new CreateIndexCallable(family,
+				qualifier, indexType, arguments);
+		Map<byte[], Boolean> results = null;
 
-        if (results != null) {
-            for (byte[] regionName : results.keySet()) {
-                if (!results.get(regionName)) {
-                    LOG.error("Region [" + new String(regionName) + "] failed to create the requested index.");
-                }
-            }
-        }
-    }
-    
-    /**
-     * Deletes an index on this table's family:qualifier column.
-     * 
-     * @param family
-     * @param qualifier
-     * @throws Throwable
-     * @throws ServiceException
-     */
-    public void deleteIndex(byte[] family, byte[] qualifier) throws ServiceException, Throwable {
+		checkSecondaryIndexMasterTable();
 
-        DeleteIndexCallable callable = new DeleteIndexCallable(family, qualifier);
-        Map<byte[], Boolean> results = null;
+		updateMasterIndexTable(family, qualifier, indexType, arguments, CREATE_INDEX);
 
-        checkSecondaryIndexMasterTable();
+		results = this.coprocessorService(IndexCoprocessorInMemService.class,
+				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
 
-        updateMasterIndexTable(family, qualifier, DELETE_INDEX);
-        
+		if (results != null) {
+			for (byte[] regionName : results.keySet()) {
+				if (!results.get(regionName)) {
+					LOG.error("Region [" + new String(regionName)
+							+ "] failed to create the requested index.");
+				}
+			}
+		}
+	}
 
-        results = this.coprocessorService(IndexCoprocessorInMemService.class, HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
+	/**
+	 * Deletes an index on this table's family:qualifier column.
+	 * 
+	 * @param family
+	 * @param qualifier
+	 * @throws Throwable
+	 * @throws ServiceException
+	 */
+	public void deleteIndex(byte[] family, byte[] qualifier)
+			throws ServiceException, Throwable {
 
-        
-        if (results != null) {
-            for (byte[] regionName : results.keySet()) {
-                if (!results.get(regionName)) {
-                    LOG.error("Region [" + new String(regionName) + "] failed to delete the requested index.");
-                }
-            }
-        }
-    }
-    
-    public List<Result> execIndexedQuery(IndexedColumnQuery query) throws ServiceException, Throwable {
-        IndexedQueryCallable callable = new IndexedQueryCallable(query);
-       
-        Map<byte[], List<Result>> resultMap = null;
-        List<Result> result = new ArrayList<Result>();
-        
-        resultMap = this.coprocessorService(IndexCoprocessorInMemService.class, HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
-        
-        if (resultMap != null) {
-            for(List<Result> regionResult: resultMap.values()) {
-                result.addAll(regionResult);
-            }
-//            Collections.sort(result, new ResultComparator());
+		DeleteIndexCallable callable = new DeleteIndexCallable(family,
+				qualifier);
+		Map<byte[], Boolean> results = null;
 
-        }
-        
-        return result;
-    }
-    
-    private void updateMasterIndexTable(byte[] family, byte[] qualifier, int operation) throws IOException {
-        HTable masterIdxTable = null;
+		checkSecondaryIndexMasterTable();
 
-        try {
-            masterIdxTable = new HTable(getConfiguration(), SecondaryIndexConstants.MASTER_INDEX_TABLE_NAME);
-            
-            if(operation == CREATE_INDEX) {
-            Get idxGet = new Get(getTableName());
-            idxGet.addColumn(Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME), Util.concatByteArray(family, qualifier));
-            Result rs = masterIdxTable.get(idxGet);
-            
-            if (!rs.isEmpty()) {
-                LOG.warn("Index already exists for " + new String(family) + ":" + new String(qualifier) + " of table " + new String(getTableName()));
-                throw new IndexAlreadyExistsException("Index already exists for " + new String(family) + ":" + new String(qualifier) + " of table "
-                        + new String(getTableName()));
-            }
+		updateMasterIndexTable(family, qualifier, null, null, DELETE_INDEX);
 
-            Put idxPut = new Put(getTableName());
-            IndexedColumn ic = new IndexedColumn(family, qualifier);
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ObjectOutputStream oos = new ObjectOutputStream(baos);
-            oos.writeObject(ic);
-            idxPut.add(Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME), Util.concatByteArray(family, qualifier),
-                    baos.toByteArray());
-            oos.close();
-            masterIdxTable.put(idxPut);
-            } else if (operation == DELETE_INDEX){
-            	// Modified by Cong
-                
-            } else {
-                throw new UnsupportedOperationException("Unknown index operation type.");
-            }
+		results = this.coprocessorService(IndexCoprocessorInMemService.class,
+				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
 
-        } finally {
-            if (masterIdxTable != null) {
-                masterIdxTable.close();
-            }
-        }
+		if (results != null) {
+			for (byte[] regionName : results.keySet()) {
+				if (!results.get(regionName)) {
+					LOG.error("Region [" + new String(regionName)
+							+ "] failed to delete the requested index.");
+				}
+			}
+		}
+	}
 
-    }
+	public List<Result> execIndexedQuery(IndexedColumnQuery query)
+			throws ServiceException, Throwable {
+		IndexedQueryCallable callable = new IndexedQueryCallable(query);
 
-//    private void checkSecondaryIndexMasterTable() throws MasterNotRunningException, ZooKeeperConnectionException, IOException {
-        
-    private void checkSecondaryIndexMasterTable() throws  IOException {
-        HBaseAdmin admin = null;
-        try {
-            admin = new HBaseAdmin(getConfiguration());
-            if (!admin.tableExists(SecondaryIndexConstants.MASTER_INDEX_TABLE_NAME)) {
-                HTableDescriptor desc = new HTableDescriptor(SecondaryIndexConstants.MASTER_INDEX_TABLE_NAME);
-                desc.addFamily(new HColumnDescriptor(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME));
-                admin.createTable(desc);
-            }
-        } finally {
-            if (admin != null) {
-                admin.close();
-            }
-        }
-    }
+		Map<byte[], List<Result>> resultMap = null;
+		List<Result> result = new ArrayList<Result>();
+
+		resultMap = this.coprocessorService(IndexCoprocessorInMemService.class,
+				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
+
+		if (resultMap != null) {
+			for (List<Result> regionResult : resultMap.values()) {
+				result.addAll(regionResult);
+			}
+			// Collections.sort(result, new ResultComparator());
+
+		}
+
+		return result;
+	}
+
+	private void updateMasterIndexTable(byte[] family, byte[] qualifier,
+			String indexType, Object[] arguments, int operation)
+			throws IOException {
+		HTable masterIdxTable = null;
+
+		try {
+			masterIdxTable = new HTable(getConfiguration(),
+					SecondaryIndexConstants.MASTER_INDEX_TABLE_NAME);
+
+			if (operation == CREATE_INDEX) {
+				Get idxGet = new Get(getTableName());
+				idxGet.addColumn(
+						Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
+						Util.concatByteArray(family, qualifier));
+				Result rs = masterIdxTable.get(idxGet);
+
+				if (!rs.isEmpty()) {
+					String message = "Index already exists for "
+							+ new String(family) + ":" + new String(qualifier)
+							+ " of table " + new String(getTableName());
+					LOG.warn(message);
+					throw new IndexAlreadyExistsException(message);
+				}
+
+				Put idxPut = new Put(getTableName());
+				IndexedColumn ic = new IndexedColumn(family, qualifier);
+				ic.setIndexType(indexType);
+				ic.setArguments(arguments);
+				ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				ObjectOutputStream oos = new ObjectOutputStream(baos);
+				oos.writeObject(ic);
+				idxPut.add(
+						Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
+						Util.concatByteArray(family, qualifier), baos
+								.toByteArray());
+				oos.close();
+				masterIdxTable.put(idxPut);
+			} else if (operation == DELETE_INDEX) {
+				// Modified by Cong
+				Get idxGet = new Get(getTableName());
+				idxGet.addColumn(
+						Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
+						Util.concatByteArray(family, qualifier));
+				Result rs = masterIdxTable.get(idxGet);
+
+				if (rs.isEmpty()) {
+					String message = "Index does't exist for "
+							+ new String(family) + ":" + new String(qualifier)
+							+ " of table " + new String(getTableName());
+					LOG.warn(message);
+					throw new IndexNotExistsException(message);
+				}
+
+				Delete idxDelete = new Delete(getTableName());
+				idxDelete
+						.deleteColumn(
+								Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
+								Util.concatByteArray(family, qualifier));
+				masterIdxTable.delete(idxDelete);
+
+			} else {
+				throw new UnsupportedOperationException(
+						"Unknown index operation type.");
+			}
+
+		} finally {
+			if (masterIdxTable != null) {
+				masterIdxTable.close();
+			}
+		}
+
+	}
+
+	// private void checkSecondaryIndexMasterTable() throws
+	// MasterNotRunningException, ZooKeeperConnectionException, IOException {
+
+	private void checkSecondaryIndexMasterTable() throws IOException {
+		HBaseAdmin admin = null;
+		try {
+			admin = new HBaseAdmin(getConfiguration());
+			if (!admin
+					.tableExists(SecondaryIndexConstants.MASTER_INDEX_TABLE_NAME)) {
+				HTableDescriptor desc = new HTableDescriptor(
+						SecondaryIndexConstants.MASTER_INDEX_TABLE_NAME);
+				desc.addFamily(new HColumnDescriptor(
+						SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME));
+				admin.createTable(desc);
+			}
+		} finally {
+			if (admin != null) {
+				admin.close();
+			}
+		}
+	}
 }
