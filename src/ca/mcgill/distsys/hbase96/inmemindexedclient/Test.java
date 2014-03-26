@@ -1,8 +1,8 @@
 package ca.mcgill.distsys.hbase96.inmemindexedclient;
 
-import java.io.IOException;
-import java.util.List;
-
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexNotExistsException;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Criterion.CompareType;
+import com.google.protobuf.ServiceException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
@@ -12,17 +12,13 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.SecondaryIndexConstants;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.ByteArrayCriterion;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Column;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Criterion.CompareType;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.IndexedColumnQuery;
-
-import com.google.protobuf.ServiceException;
+import java.util.List;
 
 public class Test {
 
-  public static final String tableName = "coprocessor";
+  public static final boolean CLEAN = true;
+
+  public static final String tableName = "test";
   public static final byte[] family = Bytes.toBytes("cf");
   public static final byte[] qualifier = Bytes.toBytes("a");
 
@@ -36,9 +32,14 @@ public class Test {
   public static void initialize() throws Throwable {
     conf = HBaseConfiguration.create();
     admin = new HBaseAdmin(conf);
-    createTable();
-    createIndex();
-    populateTable();
+    if (CLEAN) {
+      createTable();
+      openTable();
+      createIndex();
+      populateTable();
+    } else {
+      openTable();
+    }
   }
 
 	/**
@@ -50,6 +51,8 @@ public class Test {
     try {
       initialize();
       testEqualsQuery();
+      testGreaterThanQuery();
+      testLessThanOrEqualsQuery();
       testRangeQuery();
     } catch (Throwable t) {
       t.printStackTrace();
@@ -73,29 +76,20 @@ public class Test {
     HColumnDescriptor cd = new HColumnDescriptor(family);
     td.addFamily(cd);
     admin.createTable(td);
+  }
+  public static void openTable() throws Throwable {
     table = new HIndexedTable(conf, tableName);
   }
 
   public static void dropIndex() throws Throwable {
-    table.deleteIndex(family, qualifier);
-    String sysIndexTable = "__sys__indextable";
-    if (admin.tableExists(sysIndexTable)) {
-      admin.disableTable(sysIndexTable);
-      admin.deleteTable(sysIndexTable);
-    }
+    try {
+      table.deleteIndex(family, qualifier);
+    } catch (IndexNotExistsException ex) {}
   }
   public static void createIndex() throws Throwable {
     System.out.println("Creating index...");
     dropIndex();
-    String namespace = "ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.pluggableIndex";
-    String indexType = namespace + ".hybridBased.HybridIndex";
-    //String indexType = namespace + ".hashtableBased.RegionColumnIndex";
-    int maxTreeSize = conf.getInt(
-        SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE,
-        SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE_DEFAULT);
-    //arguments[0] = maxTreeSize;
-    Object[] arguments = {family, qualifier};
-    table.createIndex(family, qualifier, indexType, arguments);
+    table.createIndex(family, qualifier);
   }
 
   public static void populateTable() throws Throwable {
@@ -112,41 +106,34 @@ public class Test {
     table.setAutoFlushTo(true);
   }
 
-  public static IndexedColumnQuery buildIndexedQuery(
-      byte[] family, byte[] qualifier, byte[] value) {
-    IndexedColumnQuery query = new IndexedColumnQuery();
-    query.setMustPassAllCriteria(true);
-    ByteArrayCriterion criterion = new ByteArrayCriterion(value);
-    criterion.setCompareColumn(new Column(family).setQualifier(qualifier));
-    criterion.setComparisonType(CompareType.EQUAL);
-    query.addCriterion(criterion);
-    return query;
-  }
   public static void testEqualsQuery() throws Throwable {
     System.out.println("Equals query [value2]");
     byte[] a = Bytes.toBytes("value2");
-    IndexedColumnQuery query = buildIndexedQuery(family, qualifier, a);
-    List<Result> results = table.execIndexedQuery(query);
+    List<Result> results = table.execIndexedQuery(family, qualifier, a);
     printResults(results);
   }
 
-  public static IndexedColumnQuery buildIndexedQuery(
-      byte[] family, byte[] qualifier, byte[] valueA, byte[] valueB) {
-    IndexedColumnQuery query = new IndexedColumnQuery();
-    query.setMustPassAllCriteria(true);
-    ByteArrayCriterion criterion = new ByteArrayCriterion(valueA);
-    criterion.setCompareColumn(new Column(family).setQualifier(qualifier));
-    criterion.setComparisonType(CompareType.RANGE);
-    criterion.setRange(valueA, valueB);
-    query.addCriterion(criterion);
-    return query;
+  public static void testGreaterThanQuery() throws Throwable {
+    System.out.println("GreaterThan query [value7]");
+    byte[] a = Bytes.toBytes("value7");
+    List<Result> results = table.execIndexedQuery(family, qualifier, a,
+        CompareType.GREATER);
+    printResults(results);
   }
-  public static void testRangeQuery() throws Throwable {
-    System.out.println("Range query [value3, value8]");
+
+  public static void testLessThanOrEqualsQuery() throws Throwable {
+    System.out.println("LessThanOrEquals query [value3]");
     byte[] a = Bytes.toBytes("value3");
-    byte[] b = Bytes.toBytes("value8");
-    IndexedColumnQuery query = buildIndexedQuery(family, qualifier, a, b);
-    List<Result> results = table.execIndexedQuery(query);
+    List<Result> results = table.execIndexedQuery(family, qualifier, a,
+        CompareType.LESS_OR_EQUAL);
+    printResults(results);
+  }
+
+  public static void testRangeQuery() throws Throwable {
+    System.out.println("Range query [value3, value7]");
+    byte[] a = Bytes.toBytes("value3");
+    byte[] b = Bytes.toBytes("value7");
+    List<Result> results = table.execIndexedQuery(family, qualifier, a, b);
     printResults(results);
   }
 

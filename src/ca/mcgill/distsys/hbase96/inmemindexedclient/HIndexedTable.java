@@ -1,13 +1,14 @@
 package ca.mcgill.distsys.hbase96.inmemindexedclient;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.IndexedColumn;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.SecondaryIndexConstants;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.Util;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexAlreadyExistsException;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexNotExistsException;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Criterion.CompareType;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.IndexedColumnQuery;
+import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorInMemService;
+import com.google.protobuf.ServiceException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -21,20 +22,19 @@ import org.apache.hadoop.hbase.client.HConnection;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.util.Bytes;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+
 // Modified by Cong
 //import org.apache.hadoop.hbase.exceptions.MasterNotRunningException;
 //import org.apache.hadoop.hbase.exceptions.ZooKeeperConnectionException;
-import org.apache.hadoop.hbase.util.Bytes;
-
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.IndexedColumn;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.SecondaryIndexConstants;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.Util;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexAlreadyExistsException;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexNotExistsException;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.IndexedColumnQuery;
-import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorInMemService;
-
-import com.google.protobuf.ServiceException;
 
 public class HIndexedTable extends HTable {
 
@@ -106,7 +106,7 @@ public class HIndexedTable extends HTable {
 		if (results != null) {
 			for (byte[] regionName : results.keySet()) {
 				if (!results.get(regionName)) {
-					LOG.error("Region [" + new String(regionName)
+					LOG.error("Region [" + Bytes.toString(regionName)
 							+ "] failed to create the requested index.");
 				}
 			}
@@ -138,7 +138,7 @@ public class HIndexedTable extends HTable {
 		if (results != null) {
 			for (byte[] regionName : results.keySet()) {
 				if (!results.get(regionName)) {
-					LOG.error("Region [" + new String(regionName)
+					LOG.error("Region [" + Bytes.toString(regionName)
 							+ "] failed to delete the requested index.");
 				}
 			}
@@ -166,7 +166,29 @@ public class HIndexedTable extends HTable {
 		return result;
 	}
 
-	private void updateMasterIndexTable(byte[] family, byte[] qualifier,
+  // Yousuf
+  public List<Result> execIndexedQuery(byte[] family, byte[] qualifier,
+                                       byte[] value)
+  throws ServiceException, Throwable {
+    return execIndexedQuery(Util.buildIndexedQuery(family, qualifier, value));
+  }
+
+  public List<Result> execIndexedQuery(byte[] family, byte[] qualifier,
+                                       byte[] value, CompareType comparison)
+  throws ServiceException, Throwable {
+    return execIndexedQuery(Util.buildIndexedQuery(family, qualifier,
+        value, comparison));
+  }
+
+  public List<Result> execIndexedQuery(byte[] family, byte[] qualifier,
+                                       byte[] valueA, byte[] valueB)
+  throws ServiceException, Throwable {
+    return execIndexedQuery(Util.buildIndexedQuery(family, qualifier,
+        valueA, valueB));
+  }
+  //
+
+  private void updateMasterIndexTable(byte[] family, byte[] qualifier,
 			String indexType, Object[] arguments, int operation)
 			throws IOException {
 		HTable masterIdxTable = null;
@@ -184,8 +206,8 @@ public class HIndexedTable extends HTable {
 
 				if (!rs.isEmpty()) {
 					String message = "Index already exists for "
-							+ new String(family) + ":" + new String(qualifier)
-							+ " of table " + new String(getTableName());
+							+ Bytes.toString(family) + ":" + Bytes.toString(qualifier)
+							+ " of table " + Bytes.toString(getTableName());
 					LOG.warn(message);
 					throw new IndexAlreadyExistsException(message);
 				}
@@ -213,8 +235,8 @@ public class HIndexedTable extends HTable {
 
 				if (rs.isEmpty()) {
 					String message = "Index does't exist for "
-							+ new String(family) + ":" + new String(qualifier)
-							+ " of table " + new String(getTableName());
+							+ Bytes.toString(family) + ":" + Bytes.toString(qualifier)
+							+ " of table " + Bytes.toString(getTableName());
 					LOG.warn(message);
 					throw new IndexNotExistsException(message);
 				}
@@ -260,4 +282,27 @@ public class HIndexedTable extends HTable {
 			}
 		}
 	}
+
+  // Yousuf
+  public void createHashTableIndex(byte[] family, byte[] qualifier)
+  throws Throwable {
+    int maxTreeSize = getConfiguration().getInt(
+        SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE,
+        SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE_DEFAULT);
+    Object[] arguments = {maxTreeSize, family, qualifier};
+    createIndex(family, qualifier, SecondaryIndexConstants.HASHTABLE_INDEX, arguments);
+  }
+
+  public void createHybridIndex(byte[] family, byte[] qualifier)
+  throws Throwable {
+    Object[] arguments = {family, qualifier};
+    createIndex(family, qualifier, SecondaryIndexConstants.HYBRID_INDEX, arguments);
+  }
+
+  public void createIndex(byte[] family, byte[] qualifier)
+  throws Throwable {
+    Object[] arguments = {family, qualifier};
+    createIndex(family, qualifier, SecondaryIndexConstants.DEFAULT_INDEX, arguments);
+  }
+  //
 }
