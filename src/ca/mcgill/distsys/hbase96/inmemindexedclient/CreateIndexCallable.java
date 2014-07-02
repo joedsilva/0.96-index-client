@@ -25,22 +25,26 @@ public class CreateIndexCallable implements Batch.Call<IndexCoprocessorInMemServ
     private IndexCoprocessorCreateRequest request;
 
     
-    public CreateIndexCallable(List<Column> colList, String indexType, Object[] arguments) throws InvalidQueryException {
+    public CreateIndexCallable(List<Column> colList, String indexType, Object[] arguments, Class<?>[] argumentsClasses) throws InvalidQueryException {
     	IndexCoprocessorCreateRequest.Builder builder = IndexCoprocessorCreateRequest.newBuilder();
     	builder.setIsMultiColumns(true);
     	builder.setIndexType(indexType);
     	
     	List<ByteString> bytesArguments = new ArrayList<ByteString>();
+    	List<ByteString> bytesArgumentsClasses = new ArrayList<ByteString>();
         for(int i = 0; i < arguments.length; i++){
       	  try {
   			bytesArguments.add(ByteString.copyFrom(Util.serialize(arguments[i])));
-  		} catch (IOException e) {
+  			bytesArgumentsClasses.add(ByteString.copyFrom(Util.serialize(argumentsClasses[i])));
+  		  } catch (IOException e) {
   			// TODO Auto-generated catch block
   			e.printStackTrace();
-  		}
+  		  }
         }
         
         builder.addAllArguments(bytesArguments);
+        builder.addAllArgumentsClasses(bytesArgumentsClasses);
+        
         for (Column queryCol : colList) {
             ProtoColumn.Builder columnBuilder = ProtoColumn.newBuilder();
 
@@ -53,6 +57,7 @@ public class CreateIndexCallable implements Batch.Call<IndexCoprocessorInMemServ
                 columnBuilder.setQualifier(ByteString.copyFrom(queryCol.getQualifier()));
             }
             builder.addColumn(columnBuilder.build());
+            
         }
         
         request = builder.build();
@@ -62,7 +67,7 @@ public class CreateIndexCallable implements Batch.Call<IndexCoprocessorInMemServ
     
     
     // Modified by Cong
-    public CreateIndexCallable(byte[] family, byte[] qualifier, String indexType, Object[] arguments) {
+    public CreateIndexCallable(byte[] family, byte[] qualifier, String indexType, Object[] arguments, Class<?>[] argumentsClasses) {
       IndexCoprocessorCreateRequest.Builder builder = IndexCoprocessorCreateRequest.newBuilder();
       builder.setFamily(ByteString.copyFrom(family));
       builder.setQualifier(ByteString.copyFrom(qualifier));
@@ -70,9 +75,11 @@ public class CreateIndexCallable implements Batch.Call<IndexCoprocessorInMemServ
       builder.setIndexType(indexType);
       
       List<ByteString> bytesArguments = new ArrayList<ByteString>();
+      List<ByteString> bytesArgumentsClasses = new ArrayList<ByteString>();
       for(int i = 0; i < arguments.length; i++){
     	  try {
 			bytesArguments.add(ByteString.copyFrom(Util.serialize(arguments[i])));
+			bytesArgumentsClasses.add(ByteString.copyFrom(Util.serialize(argumentsClasses[i])));
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -80,6 +87,7 @@ public class CreateIndexCallable implements Batch.Call<IndexCoprocessorInMemServ
       }
       
       builder.addAllArguments(bytesArguments);
+      builder.addAllArgumentsClasses(bytesArgumentsClasses);
       
       
       request = builder.build();

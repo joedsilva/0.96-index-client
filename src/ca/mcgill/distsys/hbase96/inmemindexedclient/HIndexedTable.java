@@ -76,20 +76,20 @@ public class HIndexedTable extends HTable {
 
 	// Modified by Cong
 	public void createIndex(String family, String qualifier, String indexType,
-			Object[] arguments) throws ServiceException, Throwable {
+			Object[] arguments, Class<?>[] argumentsClasses) throws ServiceException, Throwable {
 		createIndex(Bytes.toBytes(family), Bytes.toBytes(qualifier), indexType,
-				arguments);
+				arguments, argumentsClasses);
 	}
 
 	// create index for multiColumns
 	public void createIndex(List<Column> colList, String indexType,
-			Object[] arguments) throws ServiceException, Throwable {
+			Object[] arguments, Class<?>[] argumentsClasses) throws ServiceException, Throwable {
 
 		// Sort the list according to the concatenation of family and qualifier
-		Collections.sort(colList);
+		//Collections.sort(colList);
 
 		CreateIndexCallable callable = new CreateIndexCallable(colList,
-				indexType, arguments);
+				indexType, arguments, argumentsClasses);
 		Map<byte[], Boolean> results = null;
 
 		checkSecondaryIndexMasterTable();
@@ -97,7 +97,7 @@ public class HIndexedTable extends HTable {
 		// updateMasterIndexTable(family, qualifier, indexType, arguments,
 		// CREATE_INDEX);
 
-		updateMasterIndexTable(colList, indexType, arguments, CREATE_INDEX);
+		updateMasterIndexTable(colList, indexType, arguments, argumentsClasses, CREATE_INDEX);
 
 		results = this.coprocessorService(IndexCoprocessorInMemService.class,
 				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
@@ -123,15 +123,15 @@ public class HIndexedTable extends HTable {
 
 	// Modified by Cong
 	public void createIndex(byte[] family, byte[] qualifier, String indexType,
-			Object[] arguments) throws ServiceException, Throwable {
+			Object[] arguments, Class<?>[] argumentsClasses) throws ServiceException, Throwable {
 
 		CreateIndexCallable callable = new CreateIndexCallable(family,
-				qualifier, indexType, arguments);
+				qualifier, indexType, arguments, argumentsClasses);
 		Map<byte[], Boolean> results = null;
 
 		checkSecondaryIndexMasterTable();
 
-		updateMasterIndexTable(family, qualifier, indexType, arguments,
+		updateMasterIndexTable(family, qualifier, indexType, arguments, argumentsClasses,
 				CREATE_INDEX);
 
 		results = this.coprocessorService(IndexCoprocessorInMemService.class,
@@ -164,7 +164,7 @@ public class HIndexedTable extends HTable {
 
 		checkSecondaryIndexMasterTable();
 
-		updateMasterIndexTable(family, qualifier, null, null, DELETE_INDEX);
+		updateMasterIndexTable(family, qualifier, null, null, null, DELETE_INDEX);
 
 		results = this.coprocessorService(IndexCoprocessorInMemService.class,
 				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
@@ -187,7 +187,7 @@ public class HIndexedTable extends HTable {
 
 		checkSecondaryIndexMasterTable();
 
-		updateMasterIndexTable(colList, null, null, DELETE_INDEX);
+		updateMasterIndexTable(colList, null, null, null, DELETE_INDEX);
 
 		results = this.coprocessorService(IndexCoprocessorInMemService.class,
 				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
@@ -224,7 +224,7 @@ public class HIndexedTable extends HTable {
 	}
 
 	private void updateMasterIndexTable(byte[] family, byte[] qualifier,
-			String indexType, Object[] arguments, int operation)
+			String indexType, Object[] arguments,Class<?>[] argumentsClasses, int operation)
 			throws IOException {
 		HTable masterIdxTable = null;
 
@@ -251,6 +251,8 @@ public class HIndexedTable extends HTable {
 				IndexedColumn ic = new IndexedColumn(family, qualifier);
 				ic.setIndexType(indexType);
 				ic.setArguments(arguments);
+				ic.setArgumentsClasses(argumentsClasses);
+				
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
 				ObjectOutputStream oos = new ObjectOutputStream(baos);
 				oos.writeObject(ic);
@@ -298,7 +300,7 @@ public class HIndexedTable extends HTable {
 
 	// Update master index table for multiColumns index
 	private void updateMasterIndexTable(List<Column> colList, String indexType,
-			Object[] arguments, int operation) throws IOException {
+			Object[] arguments, Class<?>[] argumentsClasses, int operation) throws IOException {
 
 		HTable masterIdxTable = null;
 
@@ -327,6 +329,8 @@ public class HIndexedTable extends HTable {
 				IndexedColumn ic = new IndexedColumn(colList);
 				ic.setIndexType(indexType);
 				ic.setArguments(arguments);
+				ic.setArgumentsClasses(argumentsClasses);
+				ic.setMultiCol(true);
 				ByteArrayOutputStream baos = new ByteArrayOutputStream();
 				ObjectOutputStream oos = new ObjectOutputStream(baos);
 				oos.writeObject(ic);
