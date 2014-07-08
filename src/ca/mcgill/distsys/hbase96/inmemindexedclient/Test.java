@@ -84,14 +84,14 @@ public class Test {
 		query.setMultiColumns(true);
 
 		ByteArrayCriterion criterion1 = new ByteArrayCriterion(
-				Bytes.toBytes("value1"));
+				Bytes.toBytes("value2"));
 		criterion1.setCompareColumn(new Column(Bytes.toBytes("cf"))
 				.setQualifier(Bytes.toBytes("a")));
 		criterion1.setComparisonType(CompareType.EQUAL);
 		query.addCriterion(criterion1);
 
 		ByteArrayCriterion criterion2 = new ByteArrayCriterion(
-				Bytes.toBytes("value1"));
+				Bytes.toBytes("value2"));
 		criterion2.setCompareColumn(new Column(Bytes.toBytes("cf"))
 				.setQualifier(Bytes.toBytes("b")));
 		criterion2.setComparisonType(CompareType.EQUAL);
