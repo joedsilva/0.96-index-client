@@ -37,7 +37,7 @@ public class IndexedQueryCallable implements Batch.Call<IndexCoprocessorInMemSer
 
         if (response.getResultCount() > 0) {
             List<ProtoResult> protoResultList = response.getResultList();
-            List<Result> result = new ArrayList<Result>(protoResultList.size());
+            List<Result> result; // = new ArrayList<Result>(protoResultList.size());
             result = Util.toResults(protoResultList);
 
             return result;

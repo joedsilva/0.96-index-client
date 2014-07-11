@@ -16,51 +16,47 @@ import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.InvalidQueryExcept
 
 import com.google.protobuf.ByteString;
 
-public class DeleteIndexCallable implements Batch.Call<IndexCoprocessorInMemService, Boolean>{
-    private IndexCoprocessorDeleteRequest request;
+public class DeleteIndexCallable
+		implements Batch.Call<IndexCoprocessorInMemService, Boolean> {
+	private IndexCoprocessorDeleteRequest request;
 
-    public DeleteIndexCallable(List<Column> colList) throws InvalidQueryException {
-        IndexCoprocessorDeleteRequest.Builder builder = IndexCoprocessorDeleteRequest.newBuilder();
-        //builder.setFamily(ByteString.copyFrom(family));
-        //builder.setQualifier(ByteString.copyFrom(qualifier));
-        builder.setIsMultiColumns(true);
-        
-        for (Column queryCol : colList) {
-            ProtoColumn.Builder columnBuilder = ProtoColumn.newBuilder();
+	public DeleteIndexCallable(List<Column> colList)
+	throws InvalidQueryException {
+		IndexCoprocessorDeleteRequest.Builder builder =
+				IndexCoprocessorDeleteRequest.newBuilder();
 
-            if (queryCol.getFamily() == null) {
-                throw new InvalidQueryException("Invalid Column in the query, a column MUST have a family.");
-            }
+		//builder.setIsMultiColumns(true);
+		for (Column queryCol : colList) {
+			ProtoColumn.Builder columnBuilder = ProtoColumn.newBuilder();
 
-            columnBuilder.setFamily(ByteString.copyFrom(queryCol.getFamily()));
-            if (queryCol.getQualifier() != null) {
-                columnBuilder.setQualifier(ByteString.copyFrom(queryCol.getQualifier()));
-            }
-            builder.addColumn(columnBuilder.build());
-        }
+			if (queryCol.getFamily() == null) {
+				throw new InvalidQueryException(
+						"Invalid Column in the query, a column MUST have a family.");
+			}
 
-        request = builder.build();
-    }
-    
-    public DeleteIndexCallable(byte[] family, byte[] qualifier) {
-        IndexCoprocessorDeleteRequest.Builder builder = IndexCoprocessorDeleteRequest.newBuilder();
-        builder.setFamily(ByteString.copyFrom(family));
-        builder.setQualifier(ByteString.copyFrom(qualifier));
-        
+			columnBuilder.setFamily(ByteString.copyFrom(queryCol.getFamily()));
+			if (queryCol.getQualifier() != null) {
+				columnBuilder.setQualifier(
+						ByteString.copyFrom(queryCol.getQualifier()));
+			}
+			builder.addColumn(columnBuilder.build());
+		}
 
-        request = builder.build();
-    }
+		request = builder.build();
+	}
 
-    public Boolean call(IndexCoprocessorInMemService instance) throws IOException {
-        ServerRpcController controller = new ServerRpcController();
-        BlockingRpcCallback<IndexCoprocessorDeleteResponse> rpcCallback = new BlockingRpcCallback<IndexCoprocessorDeleteResponse>();
-        instance.deleteIndex(controller, request, rpcCallback);
+	public Boolean call(IndexCoprocessorInMemService instance)
+	throws IOException {
+		ServerRpcController controller = new ServerRpcController();
+		BlockingRpcCallback<IndexCoprocessorDeleteResponse> rpcCallback =
+				new BlockingRpcCallback<IndexCoprocessorDeleteResponse>();
+		instance.deleteIndex(controller, request, rpcCallback);
 
-        IndexCoprocessorDeleteResponse response = rpcCallback.get();
-        if (controller.failedOnException()) {
-            throw controller.getFailedOn();
-        }
+		IndexCoprocessorDeleteResponse response = rpcCallback.get();
+		if (controller.failedOnException()) {
+			throw controller.getFailedOn();
+		}
 
-        return response.getSuccess();
-    }
+		return response.getSuccess();
+	}
 }
