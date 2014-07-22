@@ -58,9 +58,9 @@ public class Test {
 		if (CLEAN) {
 			createTable();
 			openTable();
-			//createIndex();
-			populateTable();
 			createIndex();
+			populateTable();
+			//createIndex();
 		} else {
 			openTable();
 		}
