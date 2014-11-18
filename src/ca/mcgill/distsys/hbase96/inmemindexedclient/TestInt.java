@@ -17,6 +17,10 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hadoop.hbase.util.Order;
+import org.apache.hadoop.hbase.util.OrderedBytes;
+import org.apache.hadoop.hbase.util.PositionedByteRange;
+import org.apache.hadoop.hbase.util.SimplePositionedByteRange;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,7 +45,7 @@ public class TestInt {
 	public static final List<Column> columnsAB = new ArrayList<>();
 	public static final List<Column> columnsBC = new ArrayList<>();
 
-	static {
+  static {
 		columnsAB.add(columnA);
 		columnsAB.add(columnB);
 		columnsBC.add(columnB);
@@ -175,13 +179,17 @@ public class TestInt {
 			//byte[] valueA = Bytes.toBytes("value" + i % 10);
 			//byte[] valueB = Bytes.toBytes("value" + i % 3);
 			//byte[] valueC = Bytes.toBytes("value" + i % 6);
-      byte[] row = Bytes.toBytes(i);
-      byte[] valueA = Bytes.toBytes(i % 10);
-      byte[] valueB = Bytes.toBytes(i % 3);
-      byte[] valueC = Bytes.toBytes(i % 6);
+      //byte[] row = Bytes.toBytes(i);
+      //byte[] valueA = Bytes.toBytes(i % 10);
+      //byte[] valueB = Bytes.toBytes(i % 3);
+      //byte[] valueC = Bytes.toBytes(i % 6);
+      byte[] row = getBytes(i);
+      byte[] valueA = getBytes(i % 10);
+      byte[] valueB = getBytes(i % 3);
+      byte[] valueC = getBytes(i % 6);
       Put put = new Put(row);
-			put.add(family, qualifierA, valueA);
-			put.add(family, qualifierB, valueB);
+      put.add(family, qualifierA, valueA);
+      put.add(family, qualifierB, valueB);
 			put.add(family, qualifierC, valueC);
 			table.put(put);
 		}
@@ -205,7 +213,8 @@ public class TestInt {
 	public static void testEqualsQuery(int a) throws Throwable {
 		System.out.println("SELECT * FROM " + tableName +
 				" WHERE " + columnA.toString() + " = " + a);
-		byte[] valueA = Bytes.toBytes(a);
+		//byte[] valueA = Bytes.toBytes(a);
+    byte[] valueA = getBytes(a);
 		Criterion<?> criterion = new ByteArrayCriterion(columnA, valueA);
 		IndexedColumnQuery query = new IndexedColumnQuery(criterion);
 		List<Result> results = table.execIndexedQuery(query);
@@ -215,7 +224,8 @@ public class TestInt {
 	public static void testGreaterThanQuery(int a) throws Throwable {
 		System.out.println("SELECT * FROM " + tableName +
 				" WHERE " + columnA.toString() + " > " + a);
-		byte[] valueA = Bytes.toBytes(a);
+		//byte[] valueA = Bytes.toBytes(a);
+    byte[] valueA = getBytes(a);
 		Criterion<?> criterion =
 				new ByteArrayCriterion(columnA, valueA, CompareType.GREATER);
 		IndexedColumnQuery query = new IndexedColumnQuery(criterion);
@@ -226,7 +236,8 @@ public class TestInt {
 	public static void testLessThanOrEqualsQuery(int a) throws Throwable {
 		System.out.println("SELECT * FROM " + tableName +
 				" WHERE " + columnA.toString() + " <= " + a);
-		byte[] valueA = Bytes.toBytes(a);
+		//byte[] valueA = Bytes.toBytes(a);
+    byte[] valueA = getBytes(a);
 		Criterion<?> criterion =
 				new ByteArrayCriterion(columnA, valueA, CompareType.LESS_OR_EQUAL);
 		IndexedColumnQuery query = new IndexedColumnQuery(criterion);
@@ -237,8 +248,10 @@ public class TestInt {
 	public static void testRangeQuery(int a, int b) throws Throwable {
 		System.out.println("SELECT * FROM " + tableName +
 				" WHERE " + a + " <= " + columnA.toString() + " <= " + b);
-		byte[] valueA = Bytes.toBytes(a);
-		byte[] valueB = Bytes.toBytes(b);
+		//byte[] valueA = Bytes.toBytes(a);
+		//byte[] valueB = Bytes.toBytes(b);
+    byte[] valueA = getBytes(a);
+    byte[] valueB = getBytes(b);
 		Criterion<?> criterion = new ByteArrayCriterion(columnA, valueA, valueB);
 		IndexedColumnQuery query = new IndexedColumnQuery(criterion);
 		List<Result> results = table.execIndexedQuery(query);
@@ -250,9 +263,11 @@ public class TestInt {
 		System.out.println("SELECT * FROM " + tableName +
 				" WHERE " + columnA.toString() + " = " + a +
 				" AND " + columnB.toString() + " = " + b);
-		byte[] valueA = Bytes.toBytes(a);
-		byte[] valueB = Bytes.toBytes(b);
-		Criterion<?> criterionA = new ByteArrayCriterion(columnA, valueA);
+    //byte[] valueA = Bytes.toBytes(a);
+    //byte[] valueB = Bytes.toBytes(b);
+    byte[] valueA = getBytes(a);
+    byte[] valueB = getBytes(b);
+    Criterion<?> criterionA = new ByteArrayCriterion(columnA, valueA);
 		Criterion<?> criterionB = new ByteArrayCriterion(columnB, valueB);
 		List<Criterion<?>> criteria =
 				new ArrayList(Arrays.asList(criterionA, criterionB));
@@ -266,9 +281,11 @@ public class TestInt {
 		System.out.println("SELECT * FROM " + tableName +
 				" WHERE " + columnB.toString() + " = " + b +
 				" AND " + columnC.toString() + " = " + c);
-		byte[] valueB = Bytes.toBytes(b);
-		byte[] valueC = Bytes.toBytes(c);
-		Criterion<?> criterionB = new ByteArrayCriterion(columnB, valueB);
+    //byte[] valueB = Bytes.toBytes(b);
+    //byte[] valueC = Bytes.toBytes(c);
+    byte[] valueB = getBytes(b);
+    byte[] valueC = getBytes(c);
+    Criterion<?> criterionB = new ByteArrayCriterion(columnB, valueB);
 		Criterion<?> criterionC = new ByteArrayCriterion(columnC, valueC);
 		List<Criterion<?>> criteria =
 				new ArrayList(Arrays.asList(criterionB, criterionC));
@@ -282,9 +299,11 @@ public class TestInt {
 		System.out.println("SELECT * FROM " + tableName +
 				" WHERE " + columnA.toString() + " = " + a +
 				" AND " + columnC.toString() + " = " + c);
-		byte[] valueA = Bytes.toBytes(a);
-		byte[] valueC = Bytes.toBytes(c);
-		Criterion<?> criterionA = new ByteArrayCriterion(columnA, valueA);
+    //byte[] valueA = Bytes.toBytes(a);
+    //byte[] valueC = Bytes.toBytes(c);
+    byte[] valueA = getBytes(a);
+    byte[] valueC = getBytes(c);
+    Criterion<?> criterionA = new ByteArrayCriterion(columnA, valueA);
 		Criterion<?> criterionC = new ByteArrayCriterion(columnC, valueC);
 		List<Criterion<?>> criteria =
 				new ArrayList(Arrays.asList(criterionA, criterionC));
@@ -298,8 +317,9 @@ public class TestInt {
 				"SELECT id, " + columnB.toString() + ", " + columnC.toString() +
 				" FROM " + tableName +
 				" WHERE " + columnA.toString() + " = " + a);
-		byte[] valueA = Bytes.toBytes(a);
-		Criterion<?> criterion = new ByteArrayCriterion(columnA, valueA);
+    //byte[] valueA = Bytes.toBytes(a);
+    byte[] valueA = getBytes(a);
+    Criterion<?> criterion = new ByteArrayCriterion(columnA, valueA);
 		List<Criterion<?>> criteria = new ArrayList(Arrays.asList(criterion));
 		IndexedColumnQuery query = new IndexedColumnQuery(criteria, columnsBC);
 		List<Result> results = table.execIndexedQuery(query);
@@ -312,9 +332,11 @@ public class TestInt {
 				"SELECT id, " + columnB.toString() + ", " + columnC.toString() +
 						" WHERE " + columnA.toString() + " = " + a +
 						" AND " + columnB.toString() + " = " + b);
-		byte[] valueA = Bytes.toBytes(a);
-		byte[] valueB = Bytes.toBytes(b);
-		Criterion<?> criterionA = new ByteArrayCriterion(columnA, valueA);
+    //byte[] valueA = Bytes.toBytes(a);
+    //byte[] valueB = Bytes.toBytes(b);
+    byte[] valueA = getBytes(a);
+    byte[] valueB = getBytes(b);
+    Criterion<?> criterionA = new ByteArrayCriterion(columnA, valueA);
 		Criterion<?> criterionB = new ByteArrayCriterion(columnB, valueB);
 		List<Criterion<?>> criteria =
 				new ArrayList(Arrays.asList(criterionA, criterionB));
@@ -337,10 +359,14 @@ public class TestInt {
     byte[] valueA = result.getValue(family, qualifierA);
     byte[] valueB = result.getValue(family, qualifierB);
     byte[] valueC = result.getValue(family, qualifierC);
-		str = str + (row != null ? Bytes.toInt(row) : "null") + ": ";
-    str = str + (valueA != null ? Bytes.toInt(valueA) : "null") + ", ";
-    str = str + (valueB != null ? Bytes.toInt(valueB) : "null") + ", ";
-    str = str + (valueC != null ? Bytes.toInt(valueC) : "null") + ", ";
+		//str = str + (row != null ? Bytes.toInt(row) : "null") + ": ";
+    //str = str + (valueA != null ? Bytes.toInt(valueA) : "null") + ", ";
+    //str = str + (valueB != null ? Bytes.toInt(valueB) : "null") + ", ";
+    //str = str + (valueC != null ? Bytes.toInt(valueC) : "null") + ", ";
+    str = str + (row != null ? getInt(row) : "null") + ": ";
+    str = str + (valueA != null ? getInt(valueA) : "null") + ", ";
+    str = str + (valueB != null ? getInt(valueB) : "null") + ", ";
+    str = str + (valueC != null ? getInt(valueC) : "null") + ", ";
     return str;
 	}
 
@@ -353,15 +379,13 @@ public class TestInt {
 
   public static void testIntComparison() {
     int flagbit32 = (int) Math.pow(2, 31);   // 2^^31
-    byte[] zero = Bytes.toBytes(0);
-    byte[] one = Bytes.toBytes(1);
-    byte[] _one = Bytes.toBytes(-1);
-    byte[] __one = Bytes.toBytes(-1 & ~flagbit32);
-    int intZero = Bytes.toInt(zero);
-    int intOne = Bytes.toInt(one);
-    int int_One = Bytes.toInt(_one);
-    int int__One = Bytes.toInt(__one);
-    System.out.println("" + intZero + " " + intOne + " " + int_One + " " + int__One);
+    byte[] zero = getBytes(0);
+    byte[] one = getBytes(1);
+    byte[] _one = getBytes(-1);
+    int intZero = getInt(zero);
+    int intOne = getInt(one);
+    int int_One = getInt(_one);
+    System.out.println("" + intZero + " " + intOne + " " + int_One);
     System.out.println("0 , 0  " + Bytes.compareTo(zero, zero));
     System.out.println("0 , 1  " + Bytes.compareTo(zero, one));
     System.out.println("0 , -1  " + Bytes.compareTo(zero, _one));
@@ -371,5 +395,14 @@ public class TestInt {
     System.out.println("-1 , 0  " + Bytes.compareTo(_one, zero));
     System.out.println("-1 , 1  " + Bytes.compareTo(_one, one));
     System.out.println("-1 , -1  " + Bytes.compareTo(_one, _one));
+  }
+
+  private static PositionedByteRange intWrapper = new SimplePositionedByteRange(5);
+  public static byte[] getBytes(int i) {
+    OrderedBytes.encodeInt32(intWrapper.set(5), i, Order.ASCENDING);
+    return intWrapper.getBytes();
+  }
+  public static int getInt(byte[] b) {
+    return OrderedBytes.decodeInt32(intWrapper.set(b));
   }
 }

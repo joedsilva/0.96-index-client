@@ -23,7 +23,7 @@ import java.util.List;
 
 public class Test {
 
-	public static boolean CLEAN = false;
+	public static boolean CLEAN = true;
 
 	public static final String tableName = "test";
 	public static final byte[] family = Bytes.toBytes("cf");
