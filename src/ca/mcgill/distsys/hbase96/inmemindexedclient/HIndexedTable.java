@@ -1,6 +1,7 @@
 package ca.mcgill.distsys.hbase96.inmemindexedclient;
 
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.IndexedColumn;
+import ca.mcgill.distsys.hbase96.indexcommonsinmem.ResultComparator;
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.SecondaryIndexConstants;
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.Util;
 import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexAlreadyExistsException;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -219,8 +221,9 @@ public class HIndexedTable extends HTable {
 			for (List<Result> regionResult : resultMap.values()) {
 				result.addAll(regionResult);
 			}
-			// Collections.sort(result, new ResultComparator());
-
+      if (SecondaryIndexConstants.SORT_INDEXED_QUERY_RESULTS) {
+			  Collections.sort(result, new ResultComparator());
+      }
 		}
 
 		return result;
