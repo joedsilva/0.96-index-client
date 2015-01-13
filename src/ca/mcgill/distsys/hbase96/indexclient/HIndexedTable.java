@@ -231,6 +231,8 @@ public class HIndexedTable extends HTable {
 
 	public List<Result> execIndexedQuery(IndexedColumnQuery query)
 	throws ServiceException, Throwable {
+    long startTime = System.nanoTime();
+
 		IndexedQueryCallable callable = new IndexedQueryCallable(query);
 
 		Map<byte[], List<Result>> resultMap = null;
@@ -248,6 +250,8 @@ public class HIndexedTable extends HTable {
       }
 		}
 
+    long duration = (System.nanoTime() - startTime) / 1000;
+    LOG.debug("execIndexedQuery: " + duration + " us");
 		return result;
 	}
 
@@ -445,6 +449,7 @@ public class HIndexedTable extends HTable {
 
   public Result[] getBySecondaryIndex(byte[] family, byte[] qualifier,
       byte[] value) throws IOException, ClassNotFoundException {
+    long startTime = System.nanoTime();
     HTable idxTable = null;
     Result[] result = null;
     HBaseAdmin admin = null;
@@ -493,6 +498,8 @@ public class HIndexedTable extends HTable {
       }
     }
 
+    long duration = (System.nanoTime() - startTime) / 1000;
+    LOG.debug("getBySecondaryIndex: " + duration + " us");
     return result;
   }
 }

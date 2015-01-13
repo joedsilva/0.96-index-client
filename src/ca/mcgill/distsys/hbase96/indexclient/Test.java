@@ -106,6 +106,11 @@ public class Test {
     try {
       test.initialize();
       test.run();
+      test.populateTable();
+      //test.scanTable();
+      p = 1;
+      test.populateTable();
+      //test.scanTable();
     } catch (Throwable t) {
       t.printStackTrace();
     }
@@ -220,28 +225,32 @@ public class Test {
     }
   }
 
+  public static int p = 0;  // adder
   public void populateTable() throws Throwable {
     LOG.info("Populating...");
-    table.setAutoFlushTo(false);
+    table.setAutoFlushTo(true);
     for (int i = 0; i < numRows; i++) {
       byte[] row, valueA, valueB, valueC;
       if (DATA_TYPE.equals(String.class)) {
         row = getBytes("row" + prefixZeroes("" + i));
-        valueA = getBytes("value" + i % 10);
-        valueB = getBytes("value" + i % 3);
-        valueC = getBytes("value" + i % 6);
+        valueA = getBytes("value" + ((i+p) % 10));
+        valueB = getBytes("value" + ((i+p) % 3));
+        valueC = getBytes("value" + ((i+p) % 6));
       }
       else {
         row = getBytes(i);
-        valueA = getBytes(i % 10);
-        valueB = getBytes(i % 3);
-        valueC = getBytes(i % 6);
+        valueA = getBytes((i+p) % 10);
+        valueB = getBytes((i+p) % 3);
+        valueC = getBytes((i+p) % 6);
       }
       Put put = new Put(row);
       put.add(family, qualifierA, valueA);
       put.add(family, qualifierB, valueB);
       put.add(family, qualifierC, valueC);
+      long startTime = System.nanoTime();
       table.put(put);
+      long duration = (System.nanoTime() - startTime) / 1000;
+      LOG.debug("put: " + duration + " us");
     }
     table.flushCommits();
     table.setAutoFlushTo(true);
@@ -388,7 +397,7 @@ public class Test {
 
   public void testQuerySelectABProjectBC(Object a, Object b)
   throws Throwable {
-    LOG.info("Test " + n++ + ": " + 
+    LOG.info("Test " + n++ + ": " +
         "SELECT id, " + columnB.toString() + ", " + columnC.toString() +
             " WHERE " + columnA.toString() + " = " + a +
             " AND " + columnB.toString() + " = " + b);
