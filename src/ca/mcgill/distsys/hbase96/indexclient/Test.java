@@ -1,12 +1,15 @@
-package ca.mcgill.distsys.hbase96.inmemindexedclient;
+package ca.mcgill.distsys.hbase96.indexclient;
 
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexNotExistsException;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.ByteArrayCriterion;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Column;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Criterion;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Criterion.CompareType;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.IndexedColumnQuery;
+import ca.mcgill.distsys.hbase96.indexcommons.SecondaryIndexConstants;
+import ca.mcgill.distsys.hbase96.indexcommons.exceptions.IndexNotExistsException;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.ByteArrayCriterion;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.Column;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.Criterion;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.Criterion.CompareType;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.IndexedColumnQuery;
 import com.google.protobuf.ServiceException;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
@@ -28,8 +31,12 @@ import java.util.List;
 
 public class Test {
 
+  private static Log LOG = LogFactory.getLog(Test.class);
+  
   public static boolean CLEAN = true;
-  public static Class TYPE = String.class;
+  public static Class DATA_TYPE = String.class;
+  public static String[] INDEX_TYPES = {"hybrid", "htable"};
+  public static String INDEX_TYPE = INDEX_TYPES[0];
 
   public final String tableName = "test";
   public final byte[] family = Bytes.toBytes("cf");
@@ -80,13 +87,19 @@ public class Test {
      */
   public static void main(String[] args) {
     if (args.length >= 1) {
-      System.out.println(args[0]);
+      LOG.info(args[0]);
       CLEAN = args[0].toLowerCase().equals("true");
     }
     if (args.length >= 2) {
-      System.out.println(args[1]);
-      if (args[1].toLowerCase().equals("int")) {
-        TYPE = Integer.class;
+      LOG.info(args[1]);
+      if (Arrays.asList(INDEX_TYPES).contains(args[1].toLowerCase())) {
+        INDEX_TYPE = args[1].toLowerCase();
+      }
+    }
+    if (args.length >= 3) {
+      LOG.info(args[2]);
+      if (args[2].toLowerCase().equals("int")) {
+        DATA_TYPE = Integer.class;
       }
     }
     Test test = new Test();
@@ -104,48 +117,62 @@ public class Test {
   }
 
   public void run() throws Throwable {
-    if (TYPE.equals(String.class)) {
-      testEqualsQuery("value2");
-      testEqualsQuery("xyz");
-      testGreaterThanQuery("value7");
-      testGreaterThanQuery("xyz");
-      testLessThanOrEqualsQuery("value3");
-      testLessThanOrEqualsQuery("abc");
-      testRangeQuery("value3", "value7");
-      testRangeQuery("value7", "value3");
-      testRangeQuery("value7", "z");
-      testRangeQuery("abc", "def");
-      testQueryProjectBC("value2");
-      testQuerySelectAB("value0", "value0");
-      testQuerySelectAB("value0", "xyz");
-      testQuerySelectAB("xyz", "value0");
-      testQuerySelectBC("value0", "value3");
-      testQuerySelectBC("value0", "xyz");
-      testQuerySelectBC("xyz", "value3");
-      testQuerySelectAC("value2", "value0");
-      testQuerySelectABProjectBC("value2", "value1");
+
+    if (INDEX_TYPE.equals("htable")) {
+      if (DATA_TYPE.equals(String.class)) {
+        testGetByIndexQuery("value2");
+        testGetByIndexQuery("xyz");
+      }
+      else {
+        testGetByIndexQuery(2);
+        testGetByIndexQuery(-1);
+      }
     }
-    
-    else if (TYPE.equals(Integer.class)) {
-      testEqualsQuery(2);
-      testEqualsQuery(-1);
-      testGreaterThanQuery(7);
-      testGreaterThanQuery(-1);
-      testLessThanOrEqualsQuery(3);
-      testLessThanOrEqualsQuery(-2);
-      testRangeQuery(3, 7);
-      testRangeQuery(7, 3);
-      testRangeQuery(7, -4);
-      testRangeQuery(-2, -3);
-      testQueryProjectBC(2);
-      testQuerySelectAB(0, 0);
-      testQuerySelectAB(0, -1);
-      testQuerySelectAB(-1, 0);
-      testQuerySelectBC(0, 3);
-      testQuerySelectBC(0, -1);
-      testQuerySelectBC(-1, 3);
-      testQuerySelectAC(2, 0);
-      testQuerySelectABProjectBC(2, 1);
+
+    else {
+      if (DATA_TYPE.equals(String.class)) {
+        testEqualsQuery("value2");
+        testEqualsQuery("xyz");
+        testGreaterThanQuery("value7");
+        testGreaterThanQuery("xyz");
+        testLessThanOrEqualsQuery("value3");
+        testLessThanOrEqualsQuery("abc");
+        testRangeQuery("value3", "value7");
+        testRangeQuery("value7", "value3");
+        testRangeQuery("value7", "z");
+        testRangeQuery("abc", "def");
+        testQueryProjectBC("value2");
+        testQuerySelectAB("value0", "value0");
+        testQuerySelectAB("value0", "xyz");
+        testQuerySelectAB("xyz", "value0");
+        testQuerySelectBC("value0", "value3");
+        testQuerySelectBC("value0", "xyz");
+        testQuerySelectBC("xyz", "value3");
+        testQuerySelectAC("value2", "value0");
+        testQuerySelectABProjectBC("value2", "value1");
+      }
+
+      else if (DATA_TYPE.equals(Integer.class)) {
+        testEqualsQuery(2);
+        testEqualsQuery(-1);
+        testGreaterThanQuery(7);
+        testGreaterThanQuery(-1);
+        testLessThanOrEqualsQuery(3);
+        testLessThanOrEqualsQuery(-2);
+        testRangeQuery(3, 7);
+        testRangeQuery(7, 3);
+        testRangeQuery(7, -4);
+        testRangeQuery(-2, -3);
+        testQueryProjectBC(2);
+        testQuerySelectAB(0, 0);
+        testQuerySelectAB(0, -1);
+        testQuerySelectAB(-1, 0);
+        testQuerySelectBC(0, 3);
+        testQuerySelectBC(0, -1);
+        testQuerySelectBC(-1, 3);
+        testQuerySelectAC(2, 0);
+        testQuerySelectABProjectBC(2, 1);
+      }
     }
   }
 
@@ -157,7 +184,7 @@ public class Test {
   }
 
   public void createTable() throws Throwable {
-    System.out.println("Creating table...");
+    LOG.info("Creating table...");
     dropTable();
     HTableDescriptor td = new HTableDescriptor(tableName);
     HColumnDescriptor cd = new HColumnDescriptor(family);
@@ -170,36 +197,35 @@ public class Test {
   }
 
   public void dropIndex() throws Throwable {
-    try {
-      table.deleteIndex(columnA);
-      table.deleteIndex(columnsAB);
-      table.deleteIndex(columnC);
-    } catch (IndexNotExistsException ex) {
-    }
+    try { table.deleteIndex(columnA);
+    } catch (Exception ex) {}
+    try { table.deleteIndex(columnsAB);
+    } catch (Exception ex) {}
+    try { table.deleteIndex(columnC);
+    } catch (Exception ex) {}
   }
 
   public void createIndex() throws Throwable {
-    System.out.println("Creating index...");
+    LOG.info("Creating index...");
     dropIndex();
-    table.createIndex(columnA);
-    table.createIndex(columnsAB);
-    table.createIndex(columnC);
+    if (INDEX_TYPE.equals("hybrid")) {
+      table.createHybridIndex(columnA);
+      table.createIndex(columnsAB);     // hashtable
+      table.createHybridIndex(columnC);
+    }
+    else if (INDEX_TYPE.equals("htable")) {
+      table.createHTableIndex(columnA);
+      //table.createIndex(columnsAB);
+      //table.createHTableIndex(columnC);
+    }
   }
 
   public void populateTable() throws Throwable {
-    System.out.println("Populating...");
+    LOG.info("Populating...");
     table.setAutoFlushTo(false);
     for (int i = 0; i < numRows; i++) {
-      //byte[] row = Bytes.toBytes("row" + prefixZeroes("" + i));
-      //byte[] valueA = Bytes.toBytes("value" + i % 10);
-      //byte[] valueB = Bytes.toBytes("value" + i % 3);
-      //byte[] valueC = Bytes.toBytes("value" + i % 6);
-      //byte[] row = Bytes.toBytes(i);
-      //byte[] valueA = Bytes.toBytes(i % 10);
-      //byte[] valueB = Bytes.toBytes(i % 3);
-      //byte[] valueC = Bytes.toBytes(i % 6);
       byte[] row, valueA, valueB, valueC;
-      if (TYPE.equals(String.class)) {
+      if (DATA_TYPE.equals(String.class)) {
         row = getBytes("row" + prefixZeroes("" + i));
         valueA = getBytes("value" + i % 10);
         valueB = getBytes("value" + i % 3);
@@ -222,7 +248,7 @@ public class Test {
   }
 
   public void scanTable() throws Throwable {
-    System.out.println("Scanning...");
+    LOG.info("Scanning...");
     Scan scan = new Scan();
     ResultScanner scanner = table.getScanner(scan);
     while (true) {
@@ -230,12 +256,22 @@ public class Test {
       if (result == null) {
         break;
       }
-      System.out.println(resultToString(result));
+      LOG.info(resultToString(result));
     }
   }
 
+  public void testGetByIndexQuery(Object a) throws Throwable {
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
+        " WHERE " + columnA.toString() + " = " + a);
+    //byte[] valueA = Bytes.toBytes(a);
+    byte[] valueA = getBytes(a);
+    Result[] results = table.getBySecondaryIndex(
+        columnA.getFamily(), columnA.getQualifier(), valueA);
+    printResults(results);
+  }
+
   public void testEqualsQuery(Object a) throws Throwable {
-    System.out.println("Test " + n++ + ": SELECT * FROM " + tableName +
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
         " WHERE " + columnA.toString() + " = " + a);
     //byte[] valueA = Bytes.toBytes(a);
     byte[] valueA = getBytes(a);
@@ -246,7 +282,7 @@ public class Test {
   }
 
   public void testGreaterThanQuery(Object a) throws Throwable {
-    System.out.println("Test " + n++ + ": SELECT * FROM " + tableName +
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
         " WHERE " + columnA.toString() + " > " + a);
     //byte[] valueA = Bytes.toBytes(a);
     byte[] valueA = getBytes(a);
@@ -258,7 +294,7 @@ public class Test {
   }
 
   public void testLessThanOrEqualsQuery(Object a) throws Throwable {
-    System.out.println("Test " + n++ + ": SELECT * FROM " + tableName +
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
         " WHERE " + columnA.toString() + " <= " + a);
     //byte[] valueA = Bytes.toBytes(a);
     byte[] valueA = getBytes(a);
@@ -270,7 +306,7 @@ public class Test {
   }
 
   public void testRangeQuery(Object a, Object b) throws Throwable {
-    System.out.println("Test " + n++ + ": SELECT * FROM " + tableName +
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
         " WHERE " + a + " <= " + columnA.toString() + " <= " + b);
     //byte[] valueA = Bytes.toBytes(a);
     //byte[] valueB = Bytes.toBytes(b);
@@ -284,7 +320,7 @@ public class Test {
 
   public void testQuerySelectAB(Object a, Object b)
   throws Throwable {
-    System.out.println("Test " + n++ + ": SELECT * FROM " + tableName +
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
         " WHERE " + columnA.toString() + " = " + a +
         " AND " + columnB.toString() + " = " + b);
     //byte[] valueA = Bytes.toBytes(a);
@@ -302,7 +338,7 @@ public class Test {
 
   public void testQuerySelectBC(Object b, Object c)
   throws Throwable {
-    System.out.println("Test " + n++ + ": SELECT * FROM " + tableName +
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
         " WHERE " + columnB.toString() + " = " + b +
         " AND " + columnC.toString() + " = " + c);
     //byte[] valueB = Bytes.toBytes(b);
@@ -320,7 +356,7 @@ public class Test {
 
   public void testQuerySelectAC(Object a, Object c)
       throws Throwable {
-    System.out.println("Test " + n++ + ": SELECT * FROM " + tableName +
+    LOG.info("Test " + n++ + ": SELECT * FROM " + tableName +
         " WHERE " + columnA.toString() + " = " + a +
         " AND " + columnC.toString() + " = " + c);
     //byte[] valueA = Bytes.toBytes(a);
@@ -337,7 +373,7 @@ public class Test {
   }
 
   public void testQueryProjectBC(Object a) throws Throwable {
-    System.out.println(
+    LOG.info("Test " + n++ + ": " +
         "SELECT id, " + columnB.toString() + ", " + columnC.toString() +
         " FROM " + tableName +
         " WHERE " + columnA.toString() + " = " + a);
@@ -352,7 +388,7 @@ public class Test {
 
   public void testQuerySelectABProjectBC(Object a, Object b)
   throws Throwable {
-    System.out.println("Test " + n++ + ": " + 
+    LOG.info("Test " + n++ + ": " + 
         "SELECT id, " + columnB.toString() + ", " + columnC.toString() +
             " WHERE " + columnA.toString() + " = " + a +
             " AND " + columnB.toString() + " = " + b);
@@ -372,9 +408,14 @@ public class Test {
   public void printResults(List<Result> results) {
     if (results == null) return;
     for (Result result : results) {
-      System.out.println(resultToString(result));
+      LOG.info(resultToString(result));
     }
-    System.out.println();
+    LOG.info("");
+  }
+
+  public void printResults(Result[] results) {
+    if (results == null) return;
+    printResults(new ArrayList<Result>(Arrays.asList(results)));
   }
 
   public String resultToString(Result result) {
@@ -409,16 +450,16 @@ public class Test {
     int intZero = fromBytes(zero);
     int intOne = fromBytes(one);
     int int_One = fromBytes(_one);
-    System.out.println("" + intZero + " " + intOne + " " + int_One);
-    System.out.println("0 , 0  " + Bytes.compareTo(zero, zero));
-    System.out.println("0 , 1  " + Bytes.compareTo(zero, one));
-    System.out.println("0 , -1  " + Bytes.compareTo(zero, _one));
-    System.out.println("1 , 0  " + Bytes.compareTo(one, zero));
-    System.out.println("1 , 1  " + Bytes.compareTo(one, one));
-    System.out.println("1 , -1  " + Bytes.compareTo(one, _one));
-    System.out.println("-1 , 0  " + Bytes.compareTo(_one, zero));
-    System.out.println("-1 , 1  " + Bytes.compareTo(_one, one));
-    System.out.println("-1 , -1  " + Bytes.compareTo(_one, _one));
+    LOG.info("" + intZero + " " + intOne + " " + int_One);
+    LOG.info("0 , 0  " + Bytes.compareTo(zero, zero));
+    LOG.info("0 , 1  " + Bytes.compareTo(zero, one));
+    LOG.info("0 , -1  " + Bytes.compareTo(zero, _one));
+    LOG.info("1 , 0  " + Bytes.compareTo(one, zero));
+    LOG.info("1 , 1  " + Bytes.compareTo(one, one));
+    LOG.info("1 , -1  " + Bytes.compareTo(one, _one));
+    LOG.info("-1 , 0  " + Bytes.compareTo(_one, zero));
+    LOG.info("-1 , 1  " + Bytes.compareTo(_one, one));
+    LOG.info("-1 , -1  " + Bytes.compareTo(_one, _one));
   }
 
   public PositionedByteRange wrapper = new SimplePositionedByteRange();

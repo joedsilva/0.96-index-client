@@ -1,15 +1,16 @@
-package ca.mcgill.distsys.hbase96.inmemindexedclient;
+package ca.mcgill.distsys.hbase96.indexclient;
 
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.IndexedColumn;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.ResultComparator;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.SecondaryIndexConstants;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.Util;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexAlreadyExistsException;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.IndexNotExistsException;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Column;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.IndexedColumnQuery;
-import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.pluggableIndex.AbstractPluggableIndex;
-import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorInMemService;
+import ca.mcgill.distsys.hbase96.indexcommons.IndexedColumn;
+import ca.mcgill.distsys.hbase96.indexcommons.ResultComparator;
+import ca.mcgill.distsys.hbase96.indexcommons.SecondaryIndexConstants;
+import ca.mcgill.distsys.hbase96.indexcommons.Util;
+import ca.mcgill.distsys.hbase96.indexcommons.exceptions.IndexAlreadyExistsException;
+import ca.mcgill.distsys.hbase96.indexcommons.exceptions.IndexNotExistsException;
+import ca.mcgill.distsys.hbase96.indexcommons.exceptions.IndexNotFoundException;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.Column;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.IndexedColumnQuery;
+import ca.mcgill.distsys.hbase96.indexcoprocessors.inmem.pluggableIndex.AbstractPluggableIndex;
+import ca.mcgill.distsys.hbase96.indexcoprocessors.inmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorInMemService;
 import com.google.protobuf.ServiceException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -17,6 +18,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.MasterNotRunningException;
+import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
@@ -26,6 +29,7 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 
+import javax.crypto.CipherOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
@@ -34,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 
 // Modified by Cong
@@ -121,13 +126,18 @@ public class HIndexedTable extends HTable {
 	public void createIndex(List<Column> columns,
 			Class<? extends AbstractPluggableIndex> indexClass,
 			Object[] arguments)
-			throws ServiceException, Throwable {
+  throws ServiceException, Throwable {
 
 		// Sort the list according to the concatenation of family and qualifier
 		//Collections.sort(colList);
 
 		// Yousuf: temp fix
-		String indexClassString = indexClass.toString().split(" ")[1];
+		String indexClassString;
+    if (indexClass == null) {
+      indexClassString = SecondaryIndexConstants.HTABLE_INDEX;
+    } else {
+      indexClassString = indexClass.toString().split(" ")[1];
+    }
 		//
 
 		CreateIndexCallable callable = new CreateIndexCallable(columns,
@@ -138,17 +148,22 @@ public class HIndexedTable extends HTable {
 
 		updateMasterIndexTable(columns, indexClassString, arguments, CREATE_INDEX);
 
-		results = this.coprocessorService(IndexCoprocessorInMemService.class,
-				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
+    if (indexClassString.equals(SecondaryIndexConstants.HTABLE_INDEX)) {
+      createIndexTable(getIndexTableName(columns));
+    }
+    else {
+      results = this.coprocessorService(IndexCoprocessorInMemService.class,
+          HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
 
-		if (results != null) {
-			for (byte[] regionName : results.keySet()) {
-				if (!results.get(regionName)) {
-					LOG.error("Region [" + Bytes.toString(regionName)
-							+ "] failed to create the requested index.");
-				}
-			}
-		}
+      if (results != null) {
+        for (byte[] regionName : results.keySet()) {
+          if (!results.get(regionName)) {
+            LOG.error("Region [" + Bytes.toString(regionName)
+                + "] failed to create the requested index.");
+          }
+        }
+      }
+    }
 	}
 
 	/**
@@ -192,19 +207,26 @@ public class HIndexedTable extends HTable {
 
 		checkSecondaryIndexMasterTable();
 
-		updateMasterIndexTable(columns, null, null, DELETE_INDEX);
+		String indexClassString =
+        updateMasterIndexTable(columns, null, null, DELETE_INDEX);
 
-		results = this.coprocessorService(IndexCoprocessorInMemService.class,
-				HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
+    if (indexClassString != null &&
+        indexClassString.equals(SecondaryIndexConstants.HTABLE_INDEX)) {
+      deleteIndexTable(getIndexTableName(columns));
+    }
+    else {
+      results = this.coprocessorService(IndexCoprocessorInMemService.class,
+          HConstants.EMPTY_START_ROW, HConstants.LAST_ROW, callable);
 
-		if (results != null) {
-			for (byte[] regionName : results.keySet()) {
-				if (!results.get(regionName)) {
-					LOG.error("Region [" + Bytes.toString(regionName)
-							+ "] failed to delete the requested index.");
-				}
-			}
-		}
+      if (results != null) {
+        for (byte[] regionName : results.keySet()) {
+          if (!results.get(regionName)) {
+            LOG.error("Region [" + Bytes.toString(regionName)
+                + "] failed to delete the requested index.");
+          }
+        }
+      }
+    }
 	}
 
 	public List<Result> execIndexedQuery(IndexedColumnQuery query)
@@ -229,7 +251,8 @@ public class HIndexedTable extends HTable {
 		return result;
 	}
 
-	private void updateMasterIndexTable(List<Column> columns, String indexClass,
+  // Returns index type class string
+	private String updateMasterIndexTable(List<Column> columns, String indexClass,
 			Object[] arguments, int operation)
 	throws IOException {
 
@@ -237,7 +260,7 @@ public class HIndexedTable extends HTable {
 
 		byte[] indexName = Bytes.toBytes(Util.concatColumnsToString(columns));
 
-		try {
+    try {
 			masterIdxTable = new HTable(getConfiguration(),
 					SecondaryIndexConstants.MASTER_INDEX_TABLE_NAME);
 
@@ -260,19 +283,14 @@ public class HIndexedTable extends HTable {
 				IndexedColumn ic = new IndexedColumn(columns);
 				ic.setIndexType(indexClass);
 				ic.setArguments(arguments);
-				ByteArrayOutputStream baos = new ByteArrayOutputStream();
-				ObjectOutputStream oos = new ObjectOutputStream(baos);
-				oos.writeObject(ic);
-				idxPut.add(Bytes.toBytes(
-						SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
-						indexName, baos.toByteArray());
-				oos.close();
+				idxPut.add(Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
+						indexName, Util.serialize(ic));
 				masterIdxTable.put(idxPut);
+
 			} else if (operation == DELETE_INDEX) {
 				// Modified by Cong
 				Get idxGet = new Get(getTableName());
-				idxGet.addColumn(Bytes.toBytes(
-						SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
+				idxGet.addColumn(Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
 						indexName);
 				Result rs = masterIdxTable.get(idxGet);
 
@@ -283,6 +301,16 @@ public class HIndexedTable extends HTable {
 					LOG.warn(message);
 					throw new IndexNotExistsException(message);
 				}
+
+        try {
+          byte[] icb = rs.getValue(
+              Bytes.toBytes(SecondaryIndexConstants.MASTER_INDEX_TABLE_IDXCOLS_CF_NAME),
+              indexName);
+          IndexedColumn ic = (IndexedColumn) Util.deserialize(icb);
+          indexClass = ic.getIndexType();
+        } catch (ClassNotFoundException ex) {
+          LOG.warn(ex);
+        }
 
 				Delete idxDelete = new Delete(getTableName());
 				idxDelete.deleteColumn(Bytes.toBytes(
@@ -300,7 +328,7 @@ public class HIndexedTable extends HTable {
 				masterIdxTable.close();
 			}
 		}
-
+    return indexClass;
 	}
 
 	// private void checkSecondaryIndexMasterTable() throws
@@ -325,8 +353,15 @@ public class HIndexedTable extends HTable {
 	}
 
 	// Yousuf
-	public void createHashTableIndex(Column column)
-			throws Throwable {
+  public void createHTableIndex(Column column)
+  throws Throwable {
+    //Class indexClass = Class.forName(SecondaryIndexConstants.HTABLE_INDEX);
+    Object[] arguments = {column.getFamily(), column.getQualifier()};
+    createIndex(column, null, arguments);
+  }
+
+  public void createHashTableIndex(Column column)
+  throws Throwable {
 		Class indexClass = Class.forName(SecondaryIndexConstants.HASHTABLE_INDEX);
 		int maxTreeSize = getConfiguration().getInt(
 				SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE,
@@ -337,12 +372,12 @@ public class HIndexedTable extends HTable {
 
 	public void createHybridIndex(Column column)
 	throws Throwable {
-		Class indexClass = Class.forName(SecondaryIndexConstants.HASHTABLE_INDEX);
+		Class indexClass = Class.forName(SecondaryIndexConstants.HYBRID_INDEX);
 		Object[] arguments = {column.getFamily(), column.getQualifier()};
 		createIndex(column, indexClass, arguments);
 	}
 
-	public void createIndex(Column column)
+  public void createIndex(Column column)
 	throws Throwable {
 		Class indexClass = Class.forName(SecondaryIndexConstants.DEFAULT_INDEX);
 		Object[] arguments = {column.getFamily(), column.getQualifier()};
@@ -360,4 +395,104 @@ public class HIndexedTable extends HTable {
 		createIndex(columns, indexClass, arguments);
 	}
 	//
+
+  // HTable Index
+  private byte[] getIndexTableName(List<Column> columns){
+    // For now we only support single-column indexes
+    Column column = columns.get(0);
+    return Util.getSecondaryIndexTableName(this.getTableName(), column);
+  }
+
+  private void createIndexTable(byte[] idxTableName)
+  throws IOException {
+    HBaseAdmin admin = null;
+    try {
+      admin = new HBaseAdmin(getConfiguration());
+      if (!admin.tableExists(idxTableName)) {
+        HTableDescriptor desc = new HTableDescriptor(idxTableName);
+        desc.addFamily(new HColumnDescriptor(
+            SecondaryIndexConstants.INDEX_TABLE_IDX_CF_NAME));
+        admin.createTable(desc);
+      }
+    } finally {
+      if (admin != null) {
+        admin.close();
+      }
+    }
+  }
+
+  public void deleteIndexTable(byte[] idxTableName) throws IOException {
+    HBaseAdmin admin = null;
+    try {
+      admin = new HBaseAdmin(getConfiguration());
+      if (admin.tableExists(idxTableName)) {
+        admin.disableTable(idxTableName);
+        admin.deleteTable(idxTableName);
+        LOG.info("Index for " + Bytes.toString(idxTableName) +
+            " of table " + Bytes.toString(getTableName()) + " has been deleted.");
+      }
+    } catch (IOException ioe) {
+      throw new IndexNotFoundException(
+          "Index for " + Bytes.toString(idxTableName) +
+              " of table " + Bytes.toString(getTableName()) + " not found.");
+    } finally {
+      if (admin != null) {
+        admin.close();
+      }
+    }
+  }
+
+
+  public Result[] getBySecondaryIndex(byte[] family, byte[] qualifier,
+      byte[] value) throws IOException, ClassNotFoundException {
+    HTable idxTable = null;
+    Result[] result = null;
+    HBaseAdmin admin = null;
+    byte[] idxTableName =
+        Util.getSecondaryIndexTableName(getTableName(), family, qualifier);
+
+    try {
+      admin = new HBaseAdmin(getConfiguration());
+      if (!admin.tableExists(idxTableName)) {
+        LOG.warn("No index " + Bytes.toString(idxTableName) + " exists for " +
+            Bytes.toString(family) + ":" + Bytes.toString(qualifier) +
+            " of table " + Bytes.toString(getTableName())
+            + "; Can't use getBySecondaryIndex without an index.");
+        return result;
+      }
+
+      idxTable = new HTable(getConfiguration(), idxTableName);
+      Result temp = idxTable.get(new Get(value));
+      byte[] serializedTreeSet = temp.getValue(
+          Bytes.toBytes(SecondaryIndexConstants.INDEX_TABLE_IDX_CF_NAME),
+          Bytes.toBytes(SecondaryIndexConstants.INDEX_TABLE_IDX_C_NAME));
+      TreeSet<byte[]> primaryRowKeys;
+
+      if (serializedTreeSet != null) {
+        LOG.debug("SerializedTreeSetNotNull");
+        primaryRowKeys = Util.deserializeIndex(serializedTreeSet);
+
+        if (!primaryRowKeys.isEmpty()) {
+          List<Get> getList = new ArrayList<Get>();
+          for (byte[] rowKey : primaryRowKeys) {
+            getList.add(new Get(rowKey));
+          }
+
+          result = get(getList);
+        }
+      } else {
+        LOG.debug("SerializedTreeSetNull");
+      }
+
+    } finally {
+      if (idxTable != null) {
+        idxTable.close();
+      }
+      if (admin != null) {
+        admin.close();
+      }
+    }
+
+    return result;
+  }
 }

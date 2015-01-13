@@ -1,4 +1,4 @@
-package ca.mcgill.distsys.hbase96.inmemindexedclient;
+package ca.mcgill.distsys.hbase96.indexclient;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -12,13 +12,13 @@ import org.apache.hadoop.hbase.ipc.ServerRpcController;
 import com.google.protobuf.ByteString;
 
 
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.proto.Column;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.Util;
-import ca.mcgill.distsys.hbase96.indexcommonsinmem.exceptions.InvalidQueryException;
-import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorCreateRequest;
-import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorCreateResponse;
-import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorInMemService;
-import ca.mcgill.distsys.hbase96.indexcoprocessorsinmem.protobuf.generated.IndexCoprocessorInMem.ProtoColumn;
+import ca.mcgill.distsys.hbase96.indexcommons.proto.Column;
+import ca.mcgill.distsys.hbase96.indexcommons.Util;
+import ca.mcgill.distsys.hbase96.indexcommons.exceptions.InvalidQueryException;
+import ca.mcgill.distsys.hbase96.indexcoprocessors.inmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorCreateRequest;
+import ca.mcgill.distsys.hbase96.indexcoprocessors.inmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorCreateResponse;
+import ca.mcgill.distsys.hbase96.indexcoprocessors.inmem.protobuf.generated.IndexCoprocessorInMem.IndexCoprocessorInMemService;
+import ca.mcgill.distsys.hbase96.indexcoprocessors.inmem.protobuf.generated.IndexCoprocessorInMem.ProtoColumn;
 
 public class CreateIndexCallable implements Batch.Call<IndexCoprocessorInMemService, Boolean> {
 
