@@ -251,7 +251,7 @@ public class HIndexedTable extends HTable {
 		}
 
     long duration = (System.nanoTime() - startTime) / 1000;
-    LOG.debug("execIndexedQuery: " + duration + " us");
+    //LOG.trace("execIndexedQuery: " + duration + " us");
 		return result;
 	}
 
@@ -299,7 +299,7 @@ public class HIndexedTable extends HTable {
 				Result rs = masterIdxTable.get(idxGet);
 
 				if (rs.isEmpty()) {
-					String message = "Index does't exist for "
+					String message = "Index doesn't exist for "
 							+ Bytes.toString(indexName)
 							+ " of table " + Bytes.toString(getTableName());
 					LOG.warn(message);
@@ -380,6 +380,13 @@ public class HIndexedTable extends HTable {
 		Object[] arguments = {column.getFamily(), column.getQualifier()};
 		createIndex(column, indexClass, arguments);
 	}
+
+  public void createHybridIndex2(Column column)
+      throws Throwable {
+    Class indexClass = Class.forName(SecondaryIndexConstants.HYBRID_INDEX2);
+    Object[] arguments = {column.getFamily(), column.getQualifier()};
+    createIndex(column, indexClass, arguments);
+  }
 
   public void createIndex(Column column)
 	throws Throwable {
@@ -474,7 +481,7 @@ public class HIndexedTable extends HTable {
       TreeSet<byte[]> primaryRowKeys;
 
       if (serializedTreeSet != null) {
-        LOG.debug("SerializedTreeSetNotNull");
+        LOG.trace("SerializedTreeSetNotNull");
         primaryRowKeys = Util.deserializeIndex(serializedTreeSet);
 
         if (!primaryRowKeys.isEmpty()) {
@@ -486,7 +493,7 @@ public class HIndexedTable extends HTable {
           result = get(getList);
         }
       } else {
-        LOG.debug("SerializedTreeSetNull");
+        LOG.trace("SerializedTreeSetNull");
       }
 
     } finally {
@@ -499,7 +506,7 @@ public class HIndexedTable extends HTable {
     }
 
     long duration = (System.nanoTime() - startTime) / 1000;
-    LOG.debug("getBySecondaryIndex: " + duration + " us");
+    LOG.trace("getBySecondaryIndex: " + duration + " us");
     return result;
   }
 }
