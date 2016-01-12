@@ -378,7 +378,7 @@ public class Test {
 
   public void testQueryProjectBC(Object a) throws Throwable {
     LOG.info("Test " + n++ + ": " +
-        "SELECT id, " + columnB.toString() + ", " + columnC.toString() +
+        "SELECT log, " + columnB.toString() + ", " + columnC.toString() +
         " FROM " + tableName +
         " WHERE " + columnA.toString() + " = " + a);
     //byte[] valueA = Bytes.toBytes(a);
@@ -393,7 +393,7 @@ public class Test {
   public void testQuerySelectABProjectBC(Object a, Object b)
   throws Throwable {
     LOG.info("Test " + n++ + ": " +
-        "SELECT id, " + columnB.toString() + ", " + columnC.toString() +
+        "SELECT log, " + columnB.toString() + ", " + columnC.toString() +
             " WHERE " + columnA.toString() + " = " + a +
             " AND " + columnB.toString() + " = " + b);
     //byte[] valueA = Bytes.toBytes(a);

@@ -15,9 +15,11 @@ import com.google.protobuf.ServiceException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.MasterNotRunningException;
 import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.client.Delete;
@@ -453,9 +455,18 @@ public class HIndexedTable extends HTable {
     }
   }
 
+  private static final byte[] EMPTY = new byte[0];
 
   public Result[] getBySecondaryIndex(byte[] family, byte[] qualifier,
-      byte[] value) throws IOException, ClassNotFoundException {
+      byte[] value)
+  throws IOException, ClassNotFoundException {
+    return getBySecondaryIndex(family, qualifier, value,
+        new ArrayList<Column>());
+  }
+
+  public Result[] getBySecondaryIndex(byte[] family, byte[] qualifier,
+      byte[] value, List<Column> projectColumns)
+  throws IOException, ClassNotFoundException {
     long startTime = System.nanoTime();
     HTable idxTable = null;
     Result[] result = null;
@@ -485,12 +496,27 @@ public class HIndexedTable extends HTable {
         primaryRowKeys = Util.deserializeIndex(serializedTreeSet);
 
         if (!primaryRowKeys.isEmpty()) {
-          List<Get> getList = new ArrayList<Get>();
-          for (byte[] rowKey : primaryRowKeys) {
-            getList.add(new Get(rowKey));
+          // Check for empty projection
+          if (projectColumns.isEmpty()) {
+            result = new Result[primaryRowKeys.size()];
+            int i = 0;
+            for (byte[] rowKey : primaryRowKeys) {
+              Cell c = new KeyValue(rowKey, EMPTY, EMPTY, EMPTY);
+              result[i++] = Result.create(Arrays.asList(c));
+            }
           }
 
-          result = get(getList);
+          else {
+            List<Get> getList = new ArrayList<Get>();
+            for (byte[] rowKey : primaryRowKeys) {
+              Get get = new Get(rowKey);
+              for (Column column : projectColumns) {
+                get.addColumn(column.getFamily(), column.getQualifier());
+              }
+              getList.add(get);
+            }
+            result = get(getList);
+          }
         }
       } else {
         LOG.trace("SerializedTreeSetNull");
