@@ -26,7 +26,10 @@ import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HConnection;
+import org.apache.hadoop.hbase.client.HConnectionManager;
 import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.HTableInterface;
+import org.apache.hadoop.hbase.client.HTablePool;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -41,7 +44,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 // Modified by Cong
 //import org.apache.hadoop.hbase.exceptions.MasterNotRunningException;
@@ -54,24 +59,20 @@ public class HIndexedTable extends HTable {
 
 	private static Log LOG = LogFactory.getLog(HIndexedTable.class);
 
-	public HIndexedTable(byte[] tableName, HConnection connection,
+  public HIndexedTable(byte[] tableName, HConnection connection,
 			ExecutorService pool) throws IOException {
 		super(tableName, connection, pool);
 	}
 
-	public HIndexedTable(Configuration conf, byte[] tableName,
-			ExecutorService pool) throws IOException {
-		super(conf, tableName, pool);
-	}
-
 	public HIndexedTable(Configuration conf, byte[] tableName)
 	throws IOException {
-		super(conf, tableName);
+		this(tableName, HConnectionManager.createConnection(conf),
+        Executors.newCachedThreadPool());
 	}
 
 	public HIndexedTable(Configuration conf, String tableName)
 	throws IOException {
-		super(conf, tableName);
+		this(conf, Bytes.toBytes(tableName));
 	}
 
 	/**
@@ -468,23 +469,10 @@ public class HIndexedTable extends HTable {
       byte[] value, List<Column> projectColumns)
   throws IOException, ClassNotFoundException {
     long startTime = System.nanoTime();
-    HTable idxTable = null;
     Result[] result = null;
-    HBaseAdmin admin = null;
-    byte[] idxTableName =
-        Util.getSecondaryIndexTableName(getTableName(), family, qualifier);
-
+    HTableInterface idxTable = this.getConnection().getTable(
+        Util.getSecondaryIndexTableName(getTableName(), family, qualifier));
     try {
-      admin = new HBaseAdmin(getConfiguration());
-      if (!admin.tableExists(idxTableName)) {
-        LOG.warn("No index " + Bytes.toString(idxTableName) + " exists for " +
-            Bytes.toString(family) + ":" + Bytes.toString(qualifier) +
-            " of table " + Bytes.toString(getTableName())
-            + "; Can't use getBySecondaryIndex without an index.");
-        return result;
-      }
-
-      idxTable = new HTable(getConfiguration(), idxTableName);
       Result temp = idxTable.get(new Get(value));
       byte[] serializedTreeSet = temp.getValue(
           Bytes.toBytes(SecondaryIndexConstants.INDEX_TABLE_IDX_CF_NAME),
@@ -521,18 +509,13 @@ public class HIndexedTable extends HTable {
       } else {
         LOG.trace("SerializedTreeSetNull");
       }
-
+      long duration = (System.nanoTime() - startTime) / 1000;
+      LOG.trace("getBySecondaryIndex: " + duration + " us");
+      return result;
     } finally {
       if (idxTable != null) {
         idxTable.close();
       }
-      if (admin != null) {
-        admin.close();
-      }
     }
-
-    long duration = (System.nanoTime() - startTime) / 1000;
-    LOG.trace("getBySecondaryIndex: " + duration + " us");
-    return result;
   }
 }

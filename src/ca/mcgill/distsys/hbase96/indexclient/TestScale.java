@@ -12,7 +12,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
+import org.apache.hadoop.hbase.client.HConnectionManager;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
@@ -30,6 +32,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 public class TestScale {
@@ -60,11 +64,11 @@ public class TestScale {
   public static int numRows = (int) Math.pow(2,N);
   public static int numInserts = (int) Math.pow(2,N);
   public static int numUpdates = (int) Math.pow(2,N);
-  public static int numGets = 500;
+  public static int numGets = 2000;
   //public static int select = 1;
   //public static int select = numRows/N;
   //public static int select = numRows/2;
-  public static int select = numRows;
+  public static int select = 1;
   public static boolean clustered = false;
   public static Projection projection = Projection.ALL;
   public static final boolean printResults = false;
@@ -103,7 +107,7 @@ public class TestScale {
 
     TestScale test = new TestScale();
     try {
-      test.initialize(true);
+      test.initialize(CLEAN);
     } catch (Throwable t) {
       t.printStackTrace();
     }
@@ -139,7 +143,7 @@ public class TestScale {
       /**/
       LOG.info("Warmup completed.");
       for (Projection p : Projection.values()) {
-        if (!p.equals(Projection.PK)) continue;  // skip
+        if (!p.equals(Projection.ALL)) continue;  // skip
         projection = p;
         LOG.info("Projection: " + p.toString());
         long startTime = System.nanoTime();
@@ -352,6 +356,7 @@ public class TestScale {
         }
         else if (INDEX_TYPE.equals("htable")) {
           if (DATA_TYPE.equals(String.class)) {
+            //testGetFromBaseTable("row" + prefixZeroes("" + i));
             testGetByIndexQuery("value" + prefixZeroes("" + value));
             //testGetByIndexQuery("xyz");
           } else {
@@ -432,13 +437,14 @@ public class TestScale {
   }
 
   public void scanTable() throws Throwable {
-    scanTable(true);
+    scanTable(printResults);
   }
 
   public void scanTable(boolean print) throws Throwable {
     LOG.info("Scanning...");
     Scan scan = new Scan();
     ResultScanner scanner = table.getScanner(scan);
+    long startTime = System.nanoTime();
     while (true) {
       Result result = scanner.next();
       if (result == null) {
@@ -447,6 +453,18 @@ public class TestScale {
       if (print) {
         LOG.info(resultToString(result));
       }
+    }
+    long duration = (System.nanoTime() - startTime)/1000;
+    LOG.info("Scan time = " + duration + " us");
+  }
+
+  public void testGetFromBaseTable(Object a) throws Throwable {
+    LOG.trace("Test " + log++ + ": SELECT * FROM " + tableName +
+        " WHERE row = " + a);
+    Get get = new Get(getBytes(a));
+    Result result = table.get(get);
+    if (printResults) {
+      LOG.info(resultToString(result));
     }
   }
 
