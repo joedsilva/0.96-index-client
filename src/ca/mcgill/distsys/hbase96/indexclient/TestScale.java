@@ -64,14 +64,15 @@ public class TestScale {
   public static int numRows = (int) Math.pow(2,N);
   public static int numInserts = (int) Math.pow(2,N);
   public static int numUpdates = (int) Math.pow(2,N);
-  public static int numGets = 2000;
+  public static int numGets = 2;
+  //public static int numGets = 2000;
   //public static int select = 1;
   //public static int select = numRows/N;
   //public static int select = numRows/2;
   public static int select = 1;
   public static boolean clustered = false;
   public static Projection projection = Projection.ALL;
-  public static final boolean printResults = false;
+  public static final boolean printResults = true;
 
   public static final int numThreads = 1;
 
@@ -528,8 +529,9 @@ public class TestScale {
       //query.addColumn(columnB);
       //query.addColumn(columnC);
     }
+    //LOG.info("Query = " + query + " Criterion = " + criterion);
     List<Result> results = table.execIndexedQuery(query);
-    //printResults(results);
+    printResults(results);
   }
 
   public void testGreaterThanQuery(Object a) throws Throwable {

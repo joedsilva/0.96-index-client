@@ -22,31 +22,23 @@ import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.MasterNotRunningException;
 import org.apache.hadoop.hbase.ZooKeeperConnectionException;
-import org.apache.hadoop.hbase.client.Delete;
-import org.apache.hadoop.hbase.client.Get;
-import org.apache.hadoop.hbase.client.HBaseAdmin;
-import org.apache.hadoop.hbase.client.HConnection;
-import org.apache.hadoop.hbase.client.HConnectionManager;
-import org.apache.hadoop.hbase.client.HTable;
-import org.apache.hadoop.hbase.client.HTableInterface;
-import org.apache.hadoop.hbase.client.HTablePool;
-import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.filter.CompareFilter;
+import org.apache.hadoop.hbase.filter.Filter;
+import org.apache.hadoop.hbase.filter.FilterList;
+import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import javax.crypto.CipherOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static ca.mcgill.distsys.hbase96.indexclient.TCBase.columns;
 
 // Modified by Cong
 //import org.apache.hadoop.hbase.exceptions.MasterNotRunningException;
@@ -59,9 +51,12 @@ public class HIndexedTable extends HTable {
 
 	private static Log LOG = LogFactory.getLog(HIndexedTable.class);
 
+	private Hashtable<String, HTableInterface> htIndexTables;
+
   public HIndexedTable(byte[] tableName, HConnection connection,
 			ExecutorService pool) throws IOException {
 		super(tableName, connection, pool);
+	    htIndexTables = new Hashtable<String, HTableInterface>();
 	}
 
 	public HIndexedTable(Configuration conf, byte[] tableName)
@@ -108,14 +103,14 @@ public class HIndexedTable extends HTable {
 			Object[] arguments)
 			throws ServiceException, Throwable {
 		Column column = new Column(family, qualifier);
-		createIndex(column, indexClass, arguments);
+		createIndex(column, indexClass, arguments, null);
 	}
 
 	public void createIndex(Column column,
 			Class<? extends AbstractPluggableIndex> indexClass,
-			Object[] arguments)
+			Object[] arguments, Object[] htIdxarguments)
 	throws ServiceException, Throwable {
-		createIndex(Arrays.asList(column), indexClass, arguments);
+		createIndex(Arrays.asList(column), indexClass, arguments, htIdxarguments);
 	}
 
 	/**
@@ -128,7 +123,7 @@ public class HIndexedTable extends HTable {
 	 */
 	public void createIndex(List<Column> columns,
 			Class<? extends AbstractPluggableIndex> indexClass,
-			Object[] arguments)
+			Object[] arguments, Object[] htIdxarguments)
   throws ServiceException, Throwable {
 
 		// Sort the list according to the concatenation of family and qualifier
@@ -152,7 +147,7 @@ public class HIndexedTable extends HTable {
 		updateMasterIndexTable(columns, indexClassString, arguments, CREATE_INDEX);
 
     if (indexClassString.equals(SecondaryIndexConstants.HTABLE_INDEX)) {
-      createIndexTable(getIndexTableName(columns));
+      createIndexTable(getIndexTableName(columns), htIdxarguments);
     }
     else {
       results = this.coprocessorService(IndexCoprocessorInMemService.class,
@@ -360,11 +355,19 @@ public class HIndexedTable extends HTable {
 	}
 
 	// Yousuf
-  public void createHTableIndex(Column column)
+	public void createHTableIndex(Column column)
+			throws Throwable {
+		//Class indexClass = Class.forName(SecondaryIndexConstants.HTABLE_INDEX);
+		Object[] arguments = {column.getFamily(), column.getQualifier()};
+		createIndex(column, null, arguments, null);
+	}
+
+	// Joseph
+  public void createHTableIndex(Column column, Object[] htIdxarguments)
   throws Throwable {
     //Class indexClass = Class.forName(SecondaryIndexConstants.HTABLE_INDEX);
     Object[] arguments = {column.getFamily(), column.getQualifier()};
-    createIndex(column, null, arguments);
+    createIndex(column, null, arguments, htIdxarguments);
   }
 
   public void createHashTableIndex(Column column)
@@ -374,28 +377,28 @@ public class HIndexedTable extends HTable {
 				SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE,
 				SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE_DEFAULT);
 		Object[] arguments = {maxTreeSize, Arrays.asList(column)};
-		createIndex(column, indexClass, arguments);
+		createIndex(column, indexClass, arguments, null);
 	}
 
 	public void createHybridIndex(Column column)
 	throws Throwable {
 		Class indexClass = Class.forName(SecondaryIndexConstants.HYBRID_INDEX);
 		Object[] arguments = {column.getFamily(), column.getQualifier()};
-		createIndex(column, indexClass, arguments);
+		createIndex(column, indexClass, arguments, null);
 	}
 
   public void createHybridIndex2(Column column)
       throws Throwable {
     Class indexClass = Class.forName(SecondaryIndexConstants.HYBRID_INDEX2);
     Object[] arguments = {column.getFamily(), column.getQualifier()};
-    createIndex(column, indexClass, arguments);
+    createIndex(column, indexClass, arguments, null);
   }
 
   public void createIndex(Column column)
 	throws Throwable {
 		Class indexClass = Class.forName(SecondaryIndexConstants.DEFAULT_INDEX);
 		Object[] arguments = {column.getFamily(), column.getQualifier()};
-		createIndex(column, indexClass, arguments);
+		createIndex(column, indexClass, arguments, null);
 	}
 
 	// Multi-column indexing only works with HashTable index
@@ -406,7 +409,7 @@ public class HIndexedTable extends HTable {
 				SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE,
 				SecondaryIndexConstants.PRIMARYKEY_TREE_MAX_SIZE_DEFAULT);
 		Object[] arguments = {maxTreeSize, columns};
-		createIndex(columns, indexClass, arguments);
+		createIndex(columns, indexClass, arguments, null);
 	}
 	//
 
@@ -417,16 +420,22 @@ public class HIndexedTable extends HTable {
     return Util.getSecondaryIndexTableName(this.getTableName(), column);
   }
 
-  private void createIndexTable(byte[] idxTableName)
+  private void createIndexTable(byte[] idxTableName, Object[] htIdxarguments)
   throws IOException {
     HBaseAdmin admin = null;
     try {
       admin = new HBaseAdmin(getConfiguration());
       if (!admin.tableExists(idxTableName)) {
         HTableDescriptor desc = new HTableDescriptor(idxTableName);
-        desc.addFamily(new HColumnDescriptor(
-            SecondaryIndexConstants.INDEX_TABLE_IDX_CF_NAME));
-        admin.createTable(desc);
+        desc.addFamily(new HColumnDescriptor( SecondaryIndexConstants.INDEX_TABLE_IDX_CF_NAME));
+
+		if(htIdxarguments == null)
+        	admin.createTable(desc);
+		else
+			if(htIdxarguments instanceof byte[][])
+				admin.createTable(desc, (byte[][]) htIdxarguments);
+		    else
+				admin.createTable(desc, (byte[]) htIdxarguments[0], (byte[]) htIdxarguments[1], (Integer) htIdxarguments[2]);
       }
     } finally {
       if (admin != null) {
@@ -470,8 +479,12 @@ public class HIndexedTable extends HTable {
   throws IOException, ClassNotFoundException {
     long startTime = System.nanoTime();
     Result[] result = null;
-    HTableInterface idxTable = this.getConnection().getTable(
-        Util.getSecondaryIndexTableName(getTableName(), family, qualifier));
+	  HTableInterface idxTable = htIndexTables.get(getTableName()+":"+family+":"+qualifier);
+	  if(idxTable == null)
+	  {
+    	 idxTable = this.getConnection().getTable(Util.getSecondaryIndexTableName(getTableName(), family, qualifier));
+		 htIndexTables.put(getTableName()+":"+family+":"+qualifier, idxTable);
+	  }
     try {
       Result temp = idxTable.get(new Get(value));
       byte[] serializedTreeSet = temp.getValue(
@@ -512,10 +525,101 @@ public class HIndexedTable extends HTable {
       long duration = (System.nanoTime() - startTime) / 1000;
       LOG.trace("getBySecondaryIndex: " + duration + " us");
       return result;
-    } finally {
-      if (idxTable != null) {
-        idxTable.close();
-      }
-    }
+    } // finally { if (idxTable != null) { idxTable.close(); }
+	  catch(Exception e){LOG.trace(e); throw  e;}
   }
+
+	//Added by Joseph - NOT completely implemented or thoroughly tested.
+	public Result[] getBySecondaryIndexRange(byte[] family, byte[] qualifier, byte[] startRange, byte[] endRange, List<Column> projectColumns, int numRows) throws IOException, ClassNotFoundException
+	{
+		long startTime = System.nanoTime();
+		Result[] result = null;
+		HTableInterface idxTable = htIndexTables.get(getTableName()+":"+family+":"+qualifier);
+		List<Get> getList = new ArrayList<Get>();
+
+		if(idxTable == null)
+		{
+			idxTable = this.getConnection().getTable(Util.getSecondaryIndexTableName(getTableName(), family, qualifier));
+			htIndexTables.put(getTableName()+":"+family+":"+qualifier, idxTable);
+		}
+
+		try
+		{
+			/*
+			FilterList filter = new FilterList(FilterList.Operator.MUST_PASS_ALL);
+			Filter f1 = new SingleColumnValueFilter(family, qualifier , CompareFilter.CompareOp.GREATER_OR_EQUAL,startRange);
+			Filter f2 = new SingleColumnValueFilter(family, qualifier , CompareFilter.CompareOp.LESS_OR_EQUAL,endRange);
+			filter.addFilter(f1);
+			filter.addFilter(f2);
+			*/
+
+			Scan scan = new Scan();
+			scan.addColumn(Bytes.toBytes(SecondaryIndexConstants.INDEX_TABLE_IDX_CF_NAME),Bytes.toBytes(SecondaryIndexConstants.INDEX_TABLE_IDX_C_NAME));
+			//scan.setFilter(filter);
+			scan.setStartRow(startRange); scan.setStopRow(endRange);
+			ResultScanner scanner = idxTable.getScanner(scan);
+			Result[] results = scanner.next(numRows);
+			//LOG.trace("secondary index subtable returned " + (results==null?0:results.length) + " rows.");
+
+			int result_count = 0;
+			for(Result siRow : results)
+			{
+				byte[] serializedTreeSet = siRow.getValue( Bytes.toBytes(SecondaryIndexConstants.INDEX_TABLE_IDX_CF_NAME), Bytes.toBytes(SecondaryIndexConstants.INDEX_TABLE_IDX_C_NAME));
+				TreeSet<byte[]> primaryRowKeys;
+				Result[] tmp_result = null;
+
+				if (serializedTreeSet != null)
+				{
+					//LOG.trace("SerializedTreeSetNotNull");
+					primaryRowKeys = Util.deserializeIndex(serializedTreeSet);
+
+					if (!primaryRowKeys.isEmpty())
+					{
+						//LOG.trace("Row keys not empty");
+						// Check for empty projection
+						if (projectColumns.isEmpty()) //TODO
+						{
+							/*
+							tmp_result = new Result[primaryRowKeys.size()];
+							for (byte[] rowKey : primaryRowKeys)
+							{
+								Cell c = new KeyValue(rowKey, EMPTY, EMPTY, EMPTY);
+								result[result_count++] = Result.create(Arrays.asList(c));
+							}
+							 */
+						}
+						else
+						{
+							for (byte[] rowKey : primaryRowKeys)
+							{
+								Get get = new Get(rowKey);
+								for (Column column : projectColumns)
+								{ get.addColumn(column.getFamily(), column.getQualifier()); }
+								getList.add(get);
+							}
+						}
+					}
+					//else { LOG.info("Row keys empty");}
+				}
+				else { LOG.info("SerializedTreeSetNull"); }
+			}
+
+			//LOG.info("number of rows to fetch from base table = " + getList.size());
+			result = get(getList);
+			long duration = (System.nanoTime() - startTime) / 1000;
+			LOG.trace("getBySecondaryIndex: " + duration + " us");
+			return result;
+		} // finally { if (idxTable != null) { idxTable.close(); }
+		catch(Exception e){LOG.trace(e); throw  e;}
+	}
+
+	protected void finalize() throws Throwable
+	{
+		for(String idxCol: htIndexTables.keySet())
+		{
+			HTableInterface htIdx = htIndexTables.get(idxCol);
+			htIdx.close();
+		}
+	}
+
 }
